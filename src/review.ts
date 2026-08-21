@@ -2,8 +2,8 @@ import { execSync } from "child_process";
 import { readFile, stat } from "fs/promises";
 import { existsSync } from "fs";
 import pc from "picocolors";
-import { runSubAgent } from "./agent.js";
-import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui.js";
+import { runSubAgent } from "./agent";
+import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui";
 
 export async function fetchCodeDiffOrContent(target?: string): Promise<{ title: string; content: string }> {
   if (!target || target.trim() === "") {

@@ -1,5 +1,5 @@
 import readline from "readline";
-import { runAgentLoop } from "./agent.js";
+import { runAgentLoop } from "./agent";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
