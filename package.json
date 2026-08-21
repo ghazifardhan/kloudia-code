@@ -1,8 +1,9 @@
 {
   "name": "kloudia-code",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "AI Coding Agent CLI Harness with multi-agent orchestration, streaming responses, skills engine, and session persistence.",
   "main": "dist/index.js",
+  "type": "module",
   "bin": {
     "kloudia": "./dist/index.js"
   },
