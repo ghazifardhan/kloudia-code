@@ -57,7 +57,6 @@ export async function startAcpServer(): Promise<void> {
           history = [];
           sendJsonRpcResponse(msg.id, {
             sessionId: `acp-${Date.now()}`,
-            stopReason: "end_turn",
           });
           break;
         }
@@ -89,9 +88,7 @@ export async function startAcpServer(): Promise<void> {
 
         default: {
           if (msg.id !== undefined) {
-            sendJsonRpcResponse(msg.id, {
-              stopReason: "end_turn",
-            });
+            sendJsonRpcResponse(msg.id, {});
           }
           break;
         }
