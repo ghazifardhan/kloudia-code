@@ -68,13 +68,26 @@ export async function startAcpServer(): Promise<void> {
       }
 
       if (msg.method === "session/prompt" || msg.method === "prompt") {
-        const userPrompt = msg.params?.prompt || msg.params?.message || msg.params?.text || "";
+        let userPrompt = "";
+        if (typeof msg.params?.prompt === "string") {
+          userPrompt = msg.params.prompt;
+        } else if (Array.isArray(msg.params?.prompt)) {
+          userPrompt = msg.params.prompt
+            .filter((p: any) => p.type === "text" || p.text)
+            .map((p: any) => p.text || p.content || "")
+            .join("\n");
+        } else if (msg.params?.message) {
+          userPrompt = typeof msg.params.message === "string" ? msg.params.message : JSON.stringify(msg.params.message);
+        } else if (msg.params?.text) {
+          userPrompt = msg.params.text;
+        }
 
         try {
           const { response, updatedHistory } = await runAgentLoop(userPrompt, history, true);
           history = updatedHistory;
 
           sendResponse(msg.id, {
+            stop_reason: "end_turn",
             stopReason: "end_turn",
             content: [
               {
@@ -85,6 +98,7 @@ export async function startAcpServer(): Promise<void> {
           });
         } catch (err: any) {
           sendResponse(msg.id, {
+            stop_reason: "end_turn",
             stopReason: "end_turn",
             content: [
               {
