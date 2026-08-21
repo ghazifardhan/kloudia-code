@@ -61,6 +61,7 @@ export async function startAcpServer(): Promise<void> {
       if (msg.method === "session/new" || msg.method === "session/create") {
         history = [];
         sendResponse(msg.id, {
+          session_id: `acp-${Date.now()}`,
           sessionId: `acp-${Date.now()}`,
         });
         return;
