@@ -1,22 +1,20 @@
 {
   "name": "kloudia-code",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "AI Coding Agent CLI Harness with multi-agent orchestration, streaming responses, skills engine, and session persistence.",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "bin": {
-    "kloudia": "./bin/kloudia"
+    "kloudia": "./dist/index.js"
   },
   "files": [
-    "bin/kloudia",
+    "dist/index.js",
     "README.md"
   ],
   "scripts": {
-    "build": "bun build index.ts --compile --outfile bin/kloudia",
+    "build": "bun build index.ts --target=node --outfile dist/index.js",
     "release:patch": "npm version patch && bun run build",
     "release:minor": "npm version minor && bun run build",
-    "release:major": "npm version major && bun run build",
-    "install:global": "bun run build && sudo cp bin/kloudia /usr/local/bin/kloudia",
-    "link": "mkdir -p ~/.local/bin && cp bin/kloudia ~/.local/bin/kloudia"
+    "release:major": "npm version major && bun run build"
   },
   "devDependencies": {
     "@types/bun": "latest"

@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import inquirer from "inquirer";
 import autocompletePrompt from "inquirer-autocomplete-prompt";
 import fuzzy from "fuzzy";
