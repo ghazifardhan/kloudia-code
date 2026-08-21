@@ -148,9 +148,13 @@ export async function executeTool(name: string, args: Record<string, any>, runSu
   try {
     switch (name) {
       case "read_file": {
-        const filePath = args.path || args.file || args.filename;
+        const filePath = args.path || args.file || args.filename || args.filePath || args.target;
         if (!filePath) return "Error: path argument is required for read_file";
-        return await readFile(filePath, "utf-8");
+        try {
+          return await readFile(filePath, "utf-8");
+        } catch (e: any) {
+          return `Error reading file ${filePath}: ${e.message}`;
+        }
       }
       case "write_file": {
         if (!(await askPermission(`write_file ${args.path}`))) return "Permission denied by user.";
