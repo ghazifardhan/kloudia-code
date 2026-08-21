@@ -83,7 +83,10 @@ export async function startAcpServer(): Promise<void> {
 
         default: {
           if (msg.id !== undefined) {
-            sendJsonRpcResponse(msg.id, { status: "ok" });
+            sendJsonRpcResponse(msg.id, {
+              stopReason: "end_turn",
+              status: "ok",
+            });
           }
           break;
         }
