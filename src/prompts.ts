@@ -15,7 +15,7 @@ export async function buildSystemPrompt(settings: Settings): Promise<string> {
 
   let isGit = "no";
   try {
-    const res = execSync("git rev-parse --is-inside-work-tree", { encoding: "utf-8" }).trim();
+    const res = execSync("git rev-parse --is-inside-work-tree 2>/dev/null", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     if (res === "true") isGit = "yes";
   } catch {}
 
