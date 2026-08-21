@@ -15,7 +15,11 @@ export async function setupZedIntegration(): Promise<void> {
     if (existsSync(zedSettingsPath)) {
       try {
         const text = await readFile(zedSettingsPath, "utf-8");
-        settings = JSON.parse(text);
+        // Strip single line & multiline JSON comments commonly used in Zed settings.jsonc
+        const cleanedText = text
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/\/\/.*/g, "");
+        settings = JSON.parse(cleanedText);
       } catch {}
     }
 
