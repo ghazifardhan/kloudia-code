@@ -5,7 +5,7 @@ import { toolsDefinition, executeTool } from "./tools";
 import { buildSystemPrompt } from "./prompts";
 import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui";
 
-export async function runAgentLoop(userPrompt: string, history: any[] = []): Promise<{ response: string; updatedHistory: any[] }> {
+export async function runAgentLoop(userPrompt: string, history: any[] = [], quiet: boolean = false): Promise<{ response: string; updatedHistory: any[] }> {
   const settings = await loadSettings();
   const client = new OpenAI({
     apiKey: settings.apiKey || "dummy",
@@ -46,12 +46,12 @@ export async function runAgentLoop(userPrompt: string, history: any[] = []): Pro
           }
           if (tc.id) toolCallsBuffer[idx].id = tc.id;
           if (tc.function?.name) toolCallsBuffer[idx].function.name = tc.function.name;
-          if (tc.function?.arguments) toolCallsBuffer[idx].function.arguments += tc.function.arguments;
+          if (tc.function?.arguments) toolCallsBuffer[idx].arguments += tc.function.arguments;
         }
       }
     }
 
-    if (fullContent) {
+    if (fullContent && !quiet) {
       if (!isHeaderPrinted) {
         console.log(`\n${pc.bold(pc.magenta("✦ Kloudia"))}`);
         isHeaderPrinted = true;
@@ -82,11 +82,15 @@ export async function runAgentLoop(userPrompt: string, history: any[] = []): Pro
         args = JSON.parse(rawArgs);
       } catch {}
 
-      startToolProgress(toolName, rawArgs);
+      if (!quiet) {
+        startToolProgress(toolName, rawArgs);
+      }
       const result = await executeTool(toolName, args, async (subPrompt, role) => {
         return await runSubAgent(subPrompt, role);
       });
-      stopToolProgress(toolName, rawArgs, !result.startsWith("Permission denied") && !result.startsWith("Tool error"));
+      if (!quiet) {
+        stopToolProgress(toolName, rawArgs, !result.startsWith("Permission denied") && !result.startsWith("Tool error"));
+      }
 
       messages.push({
         role: "tool",
