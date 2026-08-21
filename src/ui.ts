@@ -36,11 +36,34 @@ export function logDivider() {
   console.log(pc.gray("─".repeat(width)));
 }
 
+let prevCpuUsage = process.cpuUsage();
+let prevCpuTime = Date.now();
+
+export function getResourceStats(): string {
+  const ramMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
+
+  const currentCpuUsage = process.cpuUsage(prevCpuUsage);
+  const currentTime = Date.now();
+  const timeDiff = (currentTime - prevCpuTime) * 1000;
+
+  prevCpuUsage = process.cpuUsage();
+  prevCpuTime = currentTime;
+
+  let cpuPercent = "0.0";
+  if (timeDiff > 0) {
+    const totalCpuMicros = currentCpuUsage.user + currentCpuUsage.system;
+    cpuPercent = ((totalCpuMicros / timeDiff) * 100).toFixed(1);
+  }
+
+  return `${ramMB} MB · CPU ${cpuPercent}%`;
+}
+
 export function logFooter(model: string) {
   const left = pc.gray("? for shortcuts");
-  const right = pc.gray(`${model} · default`);
+  const stats = getResourceStats();
+  const right = pc.gray(`${model} · ${stats}`);
   const columns = Math.min(process.stdout.columns || 80, 80);
-  const padding = Math.max(0, columns - 15 - (model.length + 10));
+  const padding = Math.max(0, columns - 15 - (`${model} · ${stats}`.length));
   console.log(`${left}${" ".repeat(padding)}${right}`);
 }
 
