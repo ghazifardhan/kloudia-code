@@ -63,20 +63,19 @@ export async function startAcpServer(): Promise<void> {
         case "session/prompt":
         case "chat/completions": {
           const userPrompt = msg.params?.prompt || msg.params?.message || msg.params?.text || "";
-          sendJsonRpcResponse(msg.id, { status: "processing" });
 
           try {
             const { response, updatedHistory } = await runAgentLoop(userPrompt, history);
             history = updatedHistory;
 
-            sendJsonRpcNotification("session/update", {
+            sendJsonRpcResponse(msg.id, {
+              stopReason: "end_turn",
               content: response,
-              status: "completed",
             });
           } catch (err: any) {
-            sendJsonRpcNotification("session/update", {
+            sendJsonRpcResponse(msg.id, {
+              stopReason: "error",
               error: err.message,
-              status: "failed",
             });
           }
           break;
