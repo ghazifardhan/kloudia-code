@@ -1,5 +1,15 @@
 import readline from "readline";
+import { appendFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 import { runAgentLoop } from "./agent";
+
+const LOG_FILE = join(homedir(), ".config", "kloudia", "acp-debug.log");
+function debugLog(msg: string) {
+  try {
+    appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {}
+}
 
 interface JsonRpcMessage {
   jsonrpc: "2.0";
@@ -16,19 +26,22 @@ function sendResponse(id: number | string | undefined, result: any) {
     id,
     result,
   };
+  debugLog(`SEND RESPONSE (${id}): ${JSON.stringify(msg)}`);
   process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
-function sendError(id: number | string | undefined, code: number, message: string) {
+function sendNotification(method: string, params: any) {
   const msg = {
     jsonrpc: "2.0",
-    id,
-    error: { code, message },
+    method,
+    params,
   };
+  debugLog(`SEND NOTIFICATION: ${JSON.stringify(msg)}`);
   process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
 export async function startAcpServer(): Promise<void> {
+  debugLog("ACP SERVER STARTED");
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -40,6 +53,7 @@ export async function startAcpServer(): Promise<void> {
   rl.on("line", async (line) => {
     const trimmed = line.trim();
     if (!trimmed) return;
+    debugLog(`RECV: ${trimmed}`);
 
     try {
       const msg: JsonRpcMessage = JSON.parse(trimmed);
@@ -52,7 +66,7 @@ export async function startAcpServer(): Promise<void> {
           },
           serverInfo: {
             name: "Kloudia ACP Server",
-            version: "1.3.9",
+            version: "1.4.2",
           },
         });
         return;
@@ -82,9 +96,31 @@ export async function startAcpServer(): Promise<void> {
           userPrompt = msg.params.text;
         }
 
+        debugLog(`PARSED PROMPT: "${userPrompt}"`);
+
+        // Send intermediate update notification if ACP requires streaming updates
+        sendNotification("session/update", {
+          session_id: msg.params?.session_id || msg.params?.sessionId,
+          state: "thinking",
+        });
+
         try {
           const { response, updatedHistory } = await runAgentLoop(userPrompt, history, true);
           history = updatedHistory;
+
+          debugLog(`AGENT RESPONSE: "${response.slice(0, 100)}..."`);
+
+          sendNotification("session/update", {
+            session_id: msg.params?.session_id || msg.params?.sessionId,
+            delta: {
+              content: [
+                {
+                  type: "text",
+                  text: response,
+                },
+              ],
+            },
+          });
 
           sendResponse(msg.id, {
             stop_reason: "end_turn",
@@ -97,6 +133,7 @@ export async function startAcpServer(): Promise<void> {
             ],
           });
         } catch (err: any) {
+          debugLog(`AGENT ERROR: ${err.message}`);
           sendResponse(msg.id, {
             stop_reason: "end_turn",
             stopReason: "end_turn",
@@ -111,12 +148,11 @@ export async function startAcpServer(): Promise<void> {
         return;
       }
 
-      // Default fallback for any other method
       if (msg.id !== undefined) {
         sendResponse(msg.id, {});
       }
     } catch (err: any) {
-      // Ignore unparseable frames
+      debugLog(`JSON PARSE ERROR: ${err.message}`);
     }
   });
 }
