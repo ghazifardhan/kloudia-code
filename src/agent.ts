@@ -5,7 +5,12 @@ import { toolsDefinition, executeTool } from "./tools";
 import { buildSystemPrompt } from "./prompts";
 import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui";
 
-export async function runAgentLoop(userPrompt: string, history: any[] = [], quiet: boolean = false): Promise<{ response: string; updatedHistory: any[] }> {
+export async function runAgentLoop(
+  userPrompt: string,
+  history: any[] = [],
+  quiet: boolean = false,
+  signal?: AbortSignal
+): Promise<{ response: string; updatedHistory: any[] }> {
   const settings = await loadSettings();
   const client = new OpenAI({
     apiKey: settings.apiKey || "dummy",
@@ -23,12 +28,19 @@ export async function runAgentLoop(userPrompt: string, history: any[] = [], quie
   let isHeaderPrinted = false;
 
   while (true) {
-    const stream = await client.chat.completions.create({
-      model: settings.model || "gpt-4o",
-      messages,
-      tools: toolsDefinition,
-      stream: true,
-    });
+    if (signal?.aborted) {
+      throw new Error("Prompt cancelled by user.");
+    }
+
+    const stream = await client.chat.completions.create(
+      {
+        model: settings.model || "gpt-4o",
+        messages,
+        tools: toolsDefinition,
+        stream: true,
+      },
+      { signal }
+    );
 
     let fullContent = "";
     let toolCallsBuffer: any[] = [];
@@ -75,6 +87,9 @@ export async function runAgentLoop(userPrompt: string, history: any[] = [], quie
     }
 
     for (const call of toolCallsBuffer) {
+      if (signal?.aborted) {
+        throw new Error("Prompt cancelled by user.");
+      }
       const toolName = call.function.name;
       const rawArgs = call.function.arguments || "{}";
       let args = {};

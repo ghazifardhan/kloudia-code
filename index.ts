@@ -155,11 +155,28 @@ async function main() {
 
     try {
       console.log(`\n${pc.bold(pc.white(trimmed))}`);
-      const { updatedHistory } = await runAgentLoop(promptToRun, history);
-      history = updatedHistory;
-      await saveSession(sessionId, history);
+
+      const controller = new AbortController();
+      const onSigInt = () => {
+        controller.abort();
+        console.log(pc.yellow("\n\n✖ Prompt cancelled by user (Ctrl+C)."));
+      };
+
+      process.once("SIGINT", onSigInt);
+
+      try {
+        const { updatedHistory } = await runAgentLoop(promptToRun, history, false, controller.signal);
+        history = updatedHistory;
+        await saveSession(sessionId, history);
+      } finally {
+        process.removeListener("SIGINT", onSigInt);
+      }
     } catch (err: any) {
-      console.error(pc.red(`Error: ${err.message}`));
+      if (err.name === "AbortError" || err.message?.includes("cancelled")) {
+        // Handled silently
+      } else {
+        console.error(pc.red(`Error: ${err.message}`));
+      }
     }
   }
 }
