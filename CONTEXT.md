@@ -5,6 +5,9 @@
 ### Agent Harness
 CLI runner responsible for execution loop, routing tasks between agents, executing tool calls, and managing prompt context.
 
+### Code Review Engine
+Built-in module capable of reviewing uncommitted changes, branches, commits, or files along two parallel axes: Standards (bugs & security) and Architecture (conventions & modularity).
+
 ### Semantic Versioning (SemVer)
 Strict version specification `MAJOR.MINOR.PATCH` governing release cycles (`PATCH` for bug fixes, `MINOR` for backward-compatible features, `MAJOR` for breaking changes).
 

@@ -7,6 +7,7 @@ import { runAgentLoop } from "./src/agent";
 import { loadSession, saveSession, listSessions } from "./src/session";
 import { loadSettings } from "./src/settings";
 import { discoverSkills, loadSkillContent } from "./src/skills";
+import { runCodeReview } from "./src/review";
 import { logBanner, logDivider, logFooter } from "./src/ui";
 import pkg from "./package.json";
 
@@ -14,6 +15,13 @@ inquirer.registerPrompt("autocomplete", autocompletePrompt);
 
 async function main() {
   const args = process.argv.slice(2);
+
+  if (args[0] === "review") {
+    const target = args[1];
+    const report = await runCodeReview(target);
+    console.log(report);
+    process.exit(0);
+  }
 
   if (args[0] === "sessions" || args[0] === "session:list") {
     const sessions = await listSessions();
@@ -49,6 +57,7 @@ async function main() {
     logDivider();
     const skills = await discoverSkills();
     const commandList = [
+      { name: "/review - Run AI Code Review on uncommitted diff or file", value: "/review" },
       { name: "/quit - Exit Kloudia CLI", value: "/quit" },
       { name: "/clear - Clear terminal screen", value: "/clear" },
       { name: "/sessions - List saved sessions", value: "/sessions" },
@@ -102,6 +111,13 @@ async function main() {
       console.log(pc.bold(pc.magenta("\nSaved Sessions:")));
       sessions.forEach((s) => console.log(`  ${pc.yellow("•")} ${pc.bold(s.id)} ${pc.gray(`(${s.updatedAt})`)}`));
       console.log();
+      continue;
+    }
+
+    if (trimmed.startsWith("/review")) {
+      const reviewTarget = trimmed.replace(/^\/review\s*/, "").trim();
+      const report = await runCodeReview(reviewTarget);
+      console.log(report);
       continue;
     }
 
