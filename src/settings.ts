@@ -1,5 +1,7 @@
 import { homedir } from "os";
 import { join } from "path";
+import { readFile } from "fs/promises";
+import { existsSync } from "fs";
 
 export interface Settings {
   apiKey?: string;
@@ -13,9 +15,8 @@ const SETTINGS_PATH = join(homedir(), ".config", "kloudia", "settings.json");
 export async function loadSettings(): Promise<Settings> {
   let fileSettings: Settings = {};
   try {
-    const file = Bun.file(SETTINGS_PATH);
-    if (await file.exists()) {
-      fileSettings = JSON.parse(await file.text());
+    if (existsSync(SETTINGS_PATH)) {
+      fileSettings = JSON.parse(await readFile(SETTINGS_PATH, "utf-8"));
     }
   } catch {}
 

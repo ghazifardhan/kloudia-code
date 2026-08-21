@@ -1,4 +1,6 @@
 import { confirm, select } from "@clack/prompts";
+import { readFile, writeFile } from "fs/promises";
+import { execSync, spawnSync } from "child_process";
 import { startToolProgress, stopToolProgress } from "./ui";
 import { loadSkillContent } from "./skills";
 
@@ -146,26 +148,25 @@ export async function executeTool(name: string, args: Record<string, any>, runSu
   try {
     switch (name) {
       case "read_file": {
-        const file = Bun.file(args.path);
-        return await file.text();
+        return await readFile(args.path, "utf-8");
       }
       case "write_file": {
         if (!(await askPermission(`write_file ${args.path}`))) return "Permission denied by user.";
-        await Bun.write(args.path, args.content);
+        await writeFile(args.path, args.content, "utf-8");
         return `Successfully wrote to ${args.path}`;
       }
       case "edit_file": {
         if (!(await askPermission(`edit_file ${args.path}`))) return "Permission denied by user.";
-        const text = await Bun.file(args.path).text();
+        const text = await readFile(args.path, "utf-8");
         if (!text.includes(args.oldString)) return "Error: oldString not found";
         const updated = text.replace(args.oldString, args.newString);
-        await Bun.write(args.path, updated);
+        await writeFile(args.path, updated, "utf-8");
         return `Successfully edited ${args.path}`;
       }
       case "ls": {
         const target = args.path || ".";
-        const proc = Bun.spawnSync(["ls", "-la", target]);
-        return proc.stdout.toString();
+        const res = execSync(`ls -la "${target}"`, { encoding: "utf-8" });
+        return res;
       }
       case "cd": {
         process.chdir(args.path);
@@ -173,14 +174,14 @@ export async function executeTool(name: string, args: Record<string, any>, runSu
       }
       case "bash": {
         if (!(await askPermission(`bash: ${args.command}`))) return "Permission denied by user.";
-        const proc = Bun.spawnSync(["sh", "-c", args.command]);
-        const stdout = proc.stdout.toString();
-        const stderr = proc.stderr.toString();
+        const proc = spawnSync("sh", ["-c", args.command], { encoding: "utf-8" });
+        const stdout = proc.stdout || "";
+        const stderr = proc.stderr || "";
         return stderr ? `${stdout}\nSTDERR:\n${stderr}` : stdout;
       }
       case "git": {
-        const proc = Bun.spawnSync(["git", ...args.args]);
-        return proc.stdout.toString() || proc.stderr.toString();
+        const proc = spawnSync("git", args.args || [], { encoding: "utf-8" });
+        return proc.stdout || proc.stderr || "";
       }
       case "task": {
         if (!runSubAgent) return "Task delegation handler unavailable";

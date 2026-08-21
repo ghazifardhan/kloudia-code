@@ -1,4 +1,6 @@
 import { join } from "path";
+import { readFile } from "fs/promises";
+import { existsSync } from "fs";
 
 export async function loadProjectMemory(): Promise<string> {
   const cwd = process.cwd();
@@ -10,9 +12,8 @@ export async function loadProjectMemory(): Promise<string> {
 
   for (const candidate of memoryCandidates) {
     try {
-      const file = Bun.file(candidate);
-      if (await file.exists()) {
-        const text = await file.text();
+      if (existsSync(candidate)) {
+        const text = await readFile(candidate, "utf-8");
         return `\nProject Memory (${candidate}):\n${text}`;
       }
     } catch {}

@@ -1,6 +1,7 @@
 import { homedir } from "os";
 import { join } from "path";
-import { mkdir, readdir } from "fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "fs/promises";
+import { existsSync } from "fs";
 
 const SESSIONS_DIR = join(homedir(), ".config", "kloudia", "sessions");
 
@@ -23,7 +24,7 @@ export async function listSessions(): Promise<SessionData[]> {
     for (const f of files) {
       if (f.endsWith(".json")) {
         try {
-          const content = await Bun.file(join(SESSIONS_DIR, f)).text();
+          const content = await readFile(join(SESSIONS_DIR, f), "utf-8");
           sessions.push(JSON.parse(content));
         } catch {}
       }
@@ -37,9 +38,9 @@ export async function listSessions(): Promise<SessionData[]> {
 export async function loadSession(sessionId: string): Promise<any[]> {
   try {
     const path = await getSessionPath(sessionId);
-    const file = Bun.file(path);
-    if (await file.exists()) {
-      const data: SessionData = JSON.parse(await file.text());
+    if (existsSync(path)) {
+      const content = await readFile(path, "utf-8");
+      const data: SessionData = JSON.parse(content);
       return data.messages || [];
     }
   } catch {}
@@ -54,7 +55,7 @@ export async function saveSession(sessionId: string, messages: any[]): Promise<v
       updatedAt: new Date().toISOString(),
       messages,
     };
-    await Bun.write(path, JSON.stringify(data, null, 2));
+    await writeFile(path, JSON.stringify(data, null, 2), "utf-8");
   } catch (err: any) {
     console.error(`Failed to save session ${sessionId}: ${err.message}`);
   }

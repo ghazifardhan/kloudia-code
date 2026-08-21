@@ -1,4 +1,5 @@
 import os from "os";
+import { execSync } from "child_process";
 import { loadProjectMemory } from "./memory";
 import { buildAvailableSkillsPrompt } from "./skills";
 import { Settings } from "./settings";
@@ -12,8 +13,11 @@ export async function buildSystemPrompt(settings: Settings): Promise<string> {
   const platform = os.platform();
   const today = new Date().toISOString().split("T")[0];
 
-  const proc = Bun.spawnSync(["git", "rev-parse", "--is-inside-work-tree"]);
-  const isGit = proc.stdout.toString().trim() === "true" ? "yes" : "no";
+  let isGit = "no";
+  try {
+    const res = execSync("git rev-parse --is-inside-work-tree", { encoding: "utf-8" }).trim();
+    if (res === "true") isGit = "yes";
+  } catch {}
 
   const envContext = `
 <env>

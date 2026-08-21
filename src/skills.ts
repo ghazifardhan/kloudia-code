@@ -1,6 +1,7 @@
 import { homedir } from "os";
 import { join } from "path";
-import { readdir } from "fs/promises";
+import { readdir, readFile } from "fs/promises";
+import { existsSync } from "fs";
 
 export interface SkillMeta {
   name: string;
@@ -42,9 +43,8 @@ export async function discoverSkills(): Promise<SkillMeta[]> {
         if (entry.isDirectory()) {
           const skillFilePath = join(dir, entry.name, "SKILL.md");
           try {
-            const file = Bun.file(skillFilePath);
-            if (await file.exists()) {
-              const text = await file.text();
+            if (existsSync(skillFilePath)) {
+              const text = await readFile(skillFilePath, "utf-8");
               const parsed = parseFrontmatter(text);
               const name = parsed.name || entry.name;
               const description = parsed.description || "No description provided.";
@@ -71,9 +71,12 @@ export async function loadSkillContent(skillName: string): Promise<string | null
   if (!target) return null;
 
   try {
-    const text = await Bun.file(target.location).text();
-    const { content } = parseFrontmatter(text);
-    return content.trim();
+    if (existsSync(target.location)) {
+      const text = await readFile(target.location, "utf-8");
+      const { content } = parseFrontmatter(text);
+      return content.trim();
+    }
+    return null;
   } catch {
     return null;
   }
