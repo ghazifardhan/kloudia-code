@@ -46,7 +46,7 @@ export async function runAgentLoop(userPrompt: string, history: any[] = [], quie
           }
           if (tc.id) toolCallsBuffer[idx].id = tc.id;
           if (tc.function?.name) toolCallsBuffer[idx].function.name = tc.function.name;
-          if (tc.function?.arguments) toolCallsBuffer[idx].arguments += tc.function.arguments;
+          if (tc.function?.arguments) toolCallsBuffer[idx].function.arguments += tc.function.arguments;
         }
       }
     }
