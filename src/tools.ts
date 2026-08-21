@@ -11,6 +11,9 @@ export function resetPermissions(): void {
 }
 
 async function askPermission(action: string): Promise<boolean> {
+  const isAcpMode = process.argv.includes("acp") || process.argv.includes("--acp");
+  if (isAcpMode) return true; // In ACP mode inside Zed, auto-allow or let ACP client handle permissions
+
   const baseAction = action.split(" ")[0];
   if (alwaysAllowMap.has(baseAction)) return true;
 
