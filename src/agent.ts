@@ -1,9 +1,9 @@
 import OpenAI from "openai";
 import pc from "picocolors";
-import { loadSettings } from "./settings";
-import { toolsDefinition, executeTool } from "./tools";
-import { buildSystemPrompt } from "./prompts";
-import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui";
+import { loadSettings } from "./settings.js";
+import { toolsDefinition, executeTool } from "./tools.js";
+import { buildSystemPrompt } from "./prompts.js";
+import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui.js";
 
 export async function runAgentLoop(userPrompt: string, history: any[] = []): Promise<{ response: string; updatedHistory: any[] }> {
   const settings = await loadSettings();

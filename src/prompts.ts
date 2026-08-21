@@ -1,8 +1,8 @@
 import os from "os";
 import { execSync } from "child_process";
-import { loadProjectMemory } from "./memory";
-import { buildAvailableSkillsPrompt } from "./skills";
-import { Settings } from "./settings";
+import { loadProjectMemory } from "./memory.js";
+import { buildAvailableSkillsPrompt } from "./skills.js";
+import { Settings } from "./settings.js";
 
 export async function buildSystemPrompt(settings: Settings): Promise<string> {
   if (settings.systemPrompt) {

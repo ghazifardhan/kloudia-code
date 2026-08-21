@@ -1,8 +1,8 @@
 import { confirm, select } from "@clack/prompts";
 import { readFile, writeFile } from "fs/promises";
 import { execSync, spawnSync } from "child_process";
-import { startToolProgress, stopToolProgress } from "./ui";
-import { loadSkillContent } from "./skills";
+import { startToolProgress, stopToolProgress } from "./ui.js";
+import { loadSkillContent } from "./skills.js";
 
 let alwaysAllowMap: Set<string> = new Set();
 
