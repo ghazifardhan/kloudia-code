@@ -39,14 +39,14 @@ export async function startAcpServer(): Promise<void> {
       switch (msg.method) {
         case "initialize": {
           sendJsonRpcResponse(msg.id, {
-            protocolVersion: "1.0",
+            protocolVersion: 1,
             capabilities: {
               streaming: true,
               tools: true,
             },
             serverInfo: {
               name: "Kloudia ACP Server",
-              version: "1.3.0",
+              version: "1.3.4",
             },
           });
           break;
