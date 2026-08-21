@@ -5,6 +5,12 @@
 ### Agent Harness
 CLI runner responsible for execution loop, routing tasks between agents, executing tool calls, and managing prompt context.
 
+### Agent Client Protocol (ACP)
+Standardized JSON-RPC protocol enabling Kloudia to run natively as an external agent inside code editors like Zed Editor (`kloudia acp`).
+
+### Zed Integration Helper
+Built-in setup helper (`kloudia setup zed`) that automatically configures `agent_servers` in `~/.config/zed/settings.json`.
+
 ### Code Review Engine
 Built-in module capable of reviewing uncommitted changes, branches, commits, or files along two parallel axes: Standards (bugs & security) and Architecture (conventions & modularity).
 

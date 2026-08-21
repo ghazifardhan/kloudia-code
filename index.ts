@@ -8,6 +8,8 @@ import { loadSession, saveSession, listSessions } from "./src/session";
 import { loadSettings } from "./src/settings";
 import { discoverSkills, loadSkillContent } from "./src/skills";
 import { runCodeReview } from "./src/review";
+import { startAcpServer } from "./src/acp";
+import { setupZedIntegration } from "./src/zed";
 import { logBanner, logDivider, logFooter } from "./src/ui";
 import pkg from "./package.json";
 
@@ -15,6 +17,16 @@ inquirer.registerPrompt("autocomplete", autocompletePrompt);
 
 async function main() {
   const args = process.argv.slice(2);
+
+  if (args[0] === "acp" || args[0] === "--acp") {
+    await startAcpServer();
+    return;
+  }
+
+  if (args[0] === "setup" && (args[1] === "zed" || args[1] === "--editor")) {
+    await setupZedIntegration();
+    process.exit(0);
+  }
 
   if (args[0] === "review") {
     const target = args[1];
