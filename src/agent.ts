@@ -89,7 +89,7 @@ export async function runAgentLoop(userPrompt: string, history: any[] = [], quie
         return await runSubAgent(subPrompt, role);
       });
       if (!quiet) {
-        stopToolProgress(toolName, rawArgs, !result.startsWith("Permission denied") && !result.startsWith("Tool error"));
+        stopToolProgress(toolName, rawArgs, !result.startsWith("Permission denied") && !result.startsWith("Tool error") && !result.startsWith("Error"));
       }
 
       messages.push({
