@@ -6,6 +6,10 @@ import { loadSkillContent } from "./skills";
 
 let alwaysAllowMap: Set<string> = new Set();
 
+export function resetPermissions(): void {
+  alwaysAllowMap.clear();
+}
+
 async function askPermission(action: string): Promise<boolean> {
   const baseAction = action.split(" ")[0];
   if (alwaysAllowMap.has(baseAction)) return true;

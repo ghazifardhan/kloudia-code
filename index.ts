@@ -8,6 +8,7 @@ import { loadSession, saveSession, listSessions } from "./src/session";
 import { loadSettings } from "./src/settings";
 import { discoverSkills, loadSkillContent } from "./src/skills";
 import { runCodeReview } from "./src/review";
+import { resetPermissions } from "./src/tools";
 import { startAcpServer } from "./src/acp";
 import { setupZedIntegration } from "./src/zed";
 import { logBanner, logDivider, logFooter } from "./src/ui";
@@ -70,6 +71,7 @@ async function main() {
     const skills = await discoverSkills();
     const commandList = [
       { name: "/review - Run AI Code Review on uncommitted diff or file", value: "/review" },
+      { name: "/reset-permissions - Reset session tool execution permissions", value: "/reset-permissions" },
       { name: "/quit - Exit Kloudia CLI", value: "/quit" },
       { name: "/clear - Clear terminal screen", value: "/clear" },
       { name: "/sessions - List saved sessions", value: "/sessions" },
@@ -115,6 +117,12 @@ async function main() {
     if (trimmed === "/clear") {
       console.clear();
       logBanner(pkg.version || "1.0.0", modelName);
+      continue;
+    }
+
+    if (trimmed === "/reset-permissions") {
+      resetPermissions();
+      console.log(`\n${pc.green("✔")} Tool execution permissions cleared for this session.`);
       continue;
     }
 
