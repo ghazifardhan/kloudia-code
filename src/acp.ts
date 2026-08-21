@@ -98,11 +98,7 @@ export async function startAcpServer(): Promise<void> {
 
         debugLog(`PARSED PROMPT: "${userPrompt}"`);
 
-        // Send intermediate update notification if ACP requires streaming updates
-        sendNotification("session/update", {
-          session_id: msg.params?.session_id || msg.params?.sessionId,
-          state: "thinking",
-        });
+        const currentSessionId = msg.params?.sessionId || msg.params?.session_id || "acp-session";
 
         try {
           const { response, updatedHistory } = await runAgentLoop(userPrompt, history, true);
@@ -110,39 +106,42 @@ export async function startAcpServer(): Promise<void> {
 
           debugLog(`AGENT RESPONSE: "${response.slice(0, 100)}..."`);
 
+          // Send official Zed ACP AgentMessageChunk notification
           sendNotification("session/update", {
-            session_id: msg.params?.session_id || msg.params?.sessionId,
-            delta: {
-              content: [
-                {
-                  type: "text",
-                  text: response,
-                },
-              ],
+            sessionId: currentSessionId,
+            session_id: currentSessionId,
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              session_update: "agent_message_chunk",
+              content: {
+                type: "text",
+                text: response,
+              },
             },
           });
 
           sendResponse(msg.id, {
-            stop_reason: "end_turn",
             stopReason: "end_turn",
-            content: [
-              {
-                type: "text",
-                text: response,
-              },
-            ],
+            stop_reason: "end_turn",
           });
         } catch (err: any) {
           debugLog(`AGENT ERROR: ${err.message}`);
-          sendResponse(msg.id, {
-            stop_reason: "end_turn",
-            stopReason: "end_turn",
-            content: [
-              {
+          sendNotification("session/update", {
+            sessionId: currentSessionId,
+            session_id: currentSessionId,
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              session_update: "agent_message_chunk",
+              content: {
                 type: "text",
                 text: `Error: ${err.message}`,
               },
-            ],
+            },
+          });
+
+          sendResponse(msg.id, {
+            stopReason: "end_turn",
+            stop_reason: "end_turn",
           });
         }
         return;
