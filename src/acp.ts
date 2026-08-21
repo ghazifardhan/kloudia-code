@@ -62,11 +62,12 @@ export async function startAcpServer(): Promise<void> {
         sendResponse(msg.id, {
           protocolVersion: 1,
           capabilities: {
-            loadSession: false,
+            loadSession: true,
+            load_session: true,
           },
           serverInfo: {
             name: "Kloudia ACP Server",
-            version: "1.4.2",
+            version: "1.5.3",
           },
         });
         return;
