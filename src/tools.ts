@@ -1,0 +1,200 @@
+import { confirm, select } from "@clack/prompts";
+import { startToolProgress, stopToolProgress } from "./ui";
+import { loadSkillContent } from "./skills";
+
+let alwaysAllowMap: Set<string> = new Set();
+
+async function askPermission(action: string): Promise<boolean> {
+  const baseAction = action.split(" ")[0];
+  if (alwaysAllowMap.has(baseAction)) return true;
+
+  stopToolProgress();
+
+  const decision = await select({
+    message: `[SAFETY] Allow action: ${action}?`,
+    options: [
+      { value: "yes", label: "Yes, allow once" },
+      { value: "always", label: "Always allow for this session" },
+      { value: "no", label: "No, deny" },
+    ],
+  });
+
+  if (decision === "always") {
+    alwaysAllowMap.add(baseAction);
+    startToolProgress(`Executing ${action}...`);
+    return true;
+  }
+
+  const allowed = decision === "yes";
+  if (allowed) {
+    startToolProgress(`Executing ${action}...`);
+  }
+  return allowed;
+}
+
+export const toolsDefinition = [
+  {
+    type: "function" as const,
+    function: {
+      name: "read_file",
+      description: "Read contents of a file",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "write_file",
+      description: "Write content to a file",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string" }, content: { type: "string" } },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "edit_file",
+      description: "Replace target string with new string in a file",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string" }, oldString: { type: "string" }, newString: { type: "string" } },
+        required: ["path", "oldString", "newString"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "bash",
+      description: "Execute bash command",
+      parameters: {
+        type: "object",
+        properties: { command: { type: "string" } },
+        required: ["command"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "ls",
+      description: "List directory contents",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string" } },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "cd",
+      description: "Change working directory",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "git",
+      description: "Run git subcommand",
+      parameters: {
+        type: "object",
+        properties: { args: { type: "array", items: { type: "string" } } },
+        required: ["args"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "task",
+      description: "Delegate sub-task to isolated sub-agent",
+      parameters: {
+        type: "object",
+        properties: { prompt: { type: "string" }, role: { type: "string" } },
+        required: ["prompt"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "skill",
+      description: "Load instructions of a specific skill",
+      parameters: {
+        type: "object",
+        properties: { name: { type: "string" } },
+        required: ["name"],
+      },
+    },
+  },
+];
+
+export async function executeTool(name: string, args: Record<string, any>, runSubAgent?: (prompt: string, role?: string) => Promise<string>): Promise<string> {
+  try {
+    switch (name) {
+      case "read_file": {
+        const file = Bun.file(args.path);
+        return await file.text();
+      }
+      case "write_file": {
+        if (!(await askPermission(`write_file ${args.path}`))) return "Permission denied by user.";
+        await Bun.write(args.path, args.content);
+        return `Successfully wrote to ${args.path}`;
+      }
+      case "edit_file": {
+        if (!(await askPermission(`edit_file ${args.path}`))) return "Permission denied by user.";
+        const text = await Bun.file(args.path).text();
+        if (!text.includes(args.oldString)) return "Error: oldString not found";
+        const updated = text.replace(args.oldString, args.newString);
+        await Bun.write(args.path, updated);
+        return `Successfully edited ${args.path}`;
+      }
+      case "ls": {
+        const target = args.path || ".";
+        const proc = Bun.spawnSync(["ls", "-la", target]);
+        return proc.stdout.toString();
+      }
+      case "cd": {
+        process.chdir(args.path);
+        return `Changed directory to ${process.cwd()}`;
+      }
+      case "bash": {
+        if (!(await askPermission(`bash: ${args.command}`))) return "Permission denied by user.";
+        const proc = Bun.spawnSync(["sh", "-c", args.command]);
+        const stdout = proc.stdout.toString();
+        const stderr = proc.stderr.toString();
+        return stderr ? `${stdout}\nSTDERR:\n${stderr}` : stdout;
+      }
+      case "git": {
+        const proc = Bun.spawnSync(["git", ...args.args]);
+        return proc.stdout.toString() || proc.stderr.toString();
+      }
+      case "task": {
+        if (!runSubAgent) return "Task delegation handler unavailable";
+        return await runSubAgent(args.prompt, args.role);
+      }
+      case "skill": {
+        const content = await loadSkillContent(args.name);
+        if (!content) return `Skill '${args.name}' not found.`;
+        return `Skill content for '${args.name}':\n${content}`;
+      }
+      default:
+        return `Unknown tool: ${name}`;
+    }
+  } catch (err: any) {
+    return `Tool error (${name}): ${err.message}`;
+  }
+}

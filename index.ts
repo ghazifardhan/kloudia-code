@@ -1,0 +1,131 @@
+#!/usr/bin/env bun
+import inquirer from "inquirer";
+import autocompletePrompt from "inquirer-autocomplete-prompt";
+import fuzzy from "fuzzy";
+import pc from "picocolors";
+import { runAgentLoop } from "./src/agent";
+import { loadSession, saveSession, listSessions } from "./src/session";
+import { loadSettings } from "./src/settings";
+import { discoverSkills, loadSkillContent } from "./src/skills";
+import { logBanner, logDivider, logFooter } from "./src/ui";
+import pkg from "./package.json";
+
+inquirer.registerPrompt("autocomplete", autocompletePrompt);
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  if (args[0] === "sessions" || args[0] === "session:list") {
+    const sessions = await listSessions();
+    console.log(pc.bold(pc.magenta("\nSaved Sessions:")));
+    sessions.forEach((s) => console.log(`  ${pc.yellow("•")} ${pc.bold(s.id)} ${pc.gray(`(${s.updatedAt})`)}`));
+    console.log();
+    process.exit(0);
+  }
+
+  let sessionId = `session-${Date.now()}`;
+
+  const resumeIdx = args.findIndex((a) => a === "--resume" || a === "-r" || a === "--session" || a === "-s");
+  if (resumeIdx !== -1 && args[resumeIdx + 1]) {
+    sessionId = args[resumeIdx + 1];
+    args.splice(resumeIdx, 2);
+  }
+
+  let history = await loadSession(sessionId);
+
+  if (args.length > 0) {
+    const prompt = args.join(" ");
+    const { updatedHistory } = await runAgentLoop(prompt, history);
+    await saveSession(sessionId, updatedHistory);
+    process.exit(0);
+  }
+
+  const settings = await loadSettings();
+  const modelName = settings.model || "gpt-4o";
+
+  logBanner(pkg.version || "1.0.0", modelName);
+
+  while (true) {
+    logDivider();
+    const skills = await discoverSkills();
+    const commandList = [
+      { name: "/quit - Exit Kloudia CLI", value: "/quit" },
+      { name: "/clear - Clear terminal screen", value: "/clear" },
+      { name: "/sessions - List saved sessions", value: "/sessions" },
+      ...skills.map((s) => ({
+        name: `/${s.name} - ${s.description.slice(0, 50)}`,
+        value: `/${s.name}`,
+      })),
+    ];
+
+    const answer = await inquirer.prompt([
+      {
+        type: "autocomplete",
+        name: "input",
+        message: ">",
+        suggestOnly: true,
+        searchText: "Searching...",
+        emptyText: "No matching commands or skills found.",
+        source: async (_: any, input: string) => {
+          input = input || "";
+          if (input.startsWith("/")) {
+            const results = fuzzy.filter(input, commandList, {
+              extract: (el) => el.value,
+            });
+            return results.map((el) => el.original);
+          }
+          return [];
+        },
+      },
+    ]);
+
+    const trimmed = (answer.input || "").trim();
+    if (!trimmed) continue;
+
+    logDivider();
+    logFooter(modelName);
+
+    if (trimmed === "/quit" || trimmed === "exit" || trimmed === "quit") {
+      console.log(`\n${pc.green("✔")} Session saved (${pc.bold(sessionId)}). Resume anytime using:`);
+      console.log(pc.bold(pc.yellow(`  bin/kloudia --resume ${sessionId}\n`)));
+      process.exit(0);
+    }
+
+    if (trimmed === "/clear") {
+      console.clear();
+      logBanner(pkg.version || "1.0.0", modelName);
+      continue;
+    }
+
+    if (trimmed === "/sessions") {
+      const sessions = await listSessions();
+      console.log(pc.bold(pc.magenta("\nSaved Sessions:")));
+      sessions.forEach((s) => console.log(`  ${pc.yellow("•")} ${pc.bold(s.id)} ${pc.gray(`(${s.updatedAt})`)}`));
+      console.log();
+      continue;
+    }
+
+    let promptToRun = trimmed;
+    if (trimmed.startsWith("/")) {
+      const targetSkillName = trimmed.slice(1);
+      const skillContent = await loadSkillContent(targetSkillName);
+      if (skillContent) {
+        promptToRun = `Execute skill '${targetSkillName}':\n${skillContent}`;
+      } else {
+        console.log(pc.red(`\nUnknown command or skill: ${trimmed}`));
+        continue;
+      }
+    }
+
+    try {
+      console.log(`\n${pc.bold(pc.white(trimmed))}`);
+      const { updatedHistory } = await runAgentLoop(promptToRun, history);
+      history = updatedHistory;
+      await saveSession(sessionId, history);
+    } catch (err: any) {
+      console.error(pc.red(`Error: ${err.message}`));
+    }
+  }
+}
+
+main();
