@@ -1,23 +1,31 @@
 import readline from "readline";
 import { runAgentLoop } from "./agent";
 
-interface JsonRpcRequest {
+interface JsonRpcMessage {
   jsonrpc: "2.0";
   id?: number | string;
-  method: string;
+  method?: string;
   params?: any;
+  result?: any;
+  error?: any;
 }
 
-function sendJsonRpcResponse(id: number | string | undefined, result?: any, error?: any) {
-  const payload: any = { jsonrpc: "2.0", id };
-  if (error) payload.error = error;
-  else payload.result = result;
-  process.stdout.write(JSON.stringify(payload) + "\n");
+function sendResponse(id: number | string | undefined, result: any) {
+  const msg = {
+    jsonrpc: "2.0",
+    id,
+    result,
+  };
+  process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
-function sendJsonRpcNotification(method: string, params?: any) {
-  const payload = { jsonrpc: "2.0", method, params };
-  process.stdout.write(JSON.stringify(payload) + "\n");
+function sendError(id: number | string | undefined, code: number, message: string) {
+  const msg = {
+    jsonrpc: "2.0",
+    id,
+    error: { code, message },
+  };
+  process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
 export async function startAcpServer(): Promise<void> {
@@ -34,67 +42,66 @@ export async function startAcpServer(): Promise<void> {
     if (!trimmed) return;
 
     try {
-      const msg: JsonRpcRequest = JSON.parse(trimmed);
+      const msg: JsonRpcMessage = JSON.parse(trimmed);
 
-      switch (msg.method) {
-        case "initialize": {
-          sendJsonRpcResponse(msg.id, {
-            protocolVersion: 1,
-            capabilities: {
-              streaming: true,
-              tools: true,
-            },
-            serverInfo: {
-              name: "Kloudia ACP Server",
-              version: "1.3.7",
-            },
+      if (msg.method === "initialize") {
+        sendResponse(msg.id, {
+          protocolVersion: 1,
+          capabilities: {
+            loadSession: false,
+          },
+          serverInfo: {
+            name: "Kloudia ACP Server",
+            version: "1.3.9",
+          },
+        });
+        return;
+      }
+
+      if (msg.method === "session/new" || msg.method === "session/create") {
+        history = [];
+        sendResponse(msg.id, {
+          sessionId: `acp-${Date.now()}`,
+        });
+        return;
+      }
+
+      if (msg.method === "session/prompt" || msg.method === "prompt") {
+        const userPrompt = msg.params?.prompt || msg.params?.message || msg.params?.text || "";
+
+        try {
+          const { response, updatedHistory } = await runAgentLoop(userPrompt, history, true);
+          history = updatedHistory;
+
+          sendResponse(msg.id, {
+            stopReason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: response,
+              },
+            ],
           });
-          break;
-        }
-
-        case "session/new":
-        case "session/create": {
-          history = [];
-          sendJsonRpcResponse(msg.id, {
-            sessionId: `acp-${Date.now()}`,
+        } catch (err: any) {
+          sendResponse(msg.id, {
+            stopReason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: `Error: ${err.message}`,
+              },
+            ],
           });
-          break;
         }
+        return;
+      }
 
-        case "prompt":
-        case "session/prompt":
-        case "chat/completions": {
-          const userPrompt = msg.params?.prompt || msg.params?.message || msg.params?.text || "";
-
-          // In ACP mode, quiet output printing to stdout to avoid corrupting JSON-RPC stream
-          const isAcpMode = process.argv.includes("acp") || process.argv.includes("--acp");
-
-          try {
-            const { response, updatedHistory } = await runAgentLoop(userPrompt, history, isAcpMode);
-            history = updatedHistory;
-
-            sendJsonRpcResponse(msg.id, {
-              stopReason: "end_turn",
-              content: response,
-            });
-          } catch (err: any) {
-            sendJsonRpcResponse(msg.id, {
-              stopReason: "end_turn",
-              error: err.message,
-            });
-          }
-          break;
-        }
-
-        default: {
-          if (msg.id !== undefined) {
-            sendJsonRpcResponse(msg.id, {});
-          }
-          break;
-        }
+      // Default fallback for any other method
+      if (msg.id !== undefined) {
+        sendResponse(msg.id, {});
       }
     } catch (err: any) {
-      // Ignore non-JSON RPC frames silently
+      // Ignore unparseable frames
     }
   });
 }
