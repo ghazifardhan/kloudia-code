@@ -22,6 +22,21 @@ export function clearTaggedFiles(): void {
   taggedFiles.clear();
 }
 
+const imageExtensions = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+
+export function isImageFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return imageExtensions.has(ext);
+}
+
+export async function fileToDataUri(filePath: string): Promise<string> {
+  const resolved = path.resolve(process.cwd(), filePath);
+  const buffer = await readFile(resolved);
+  const ext = path.extname(resolved).toLowerCase().replace(".", "");
+  const mimeType = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+  return `data:${mimeType};base64,${buffer.toString("base64")}`;
+}
+
 export async function buildTaggedFilesContext(): Promise<string> {
   if (taggedFiles.size === 0) return "";
 

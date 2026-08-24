@@ -4,9 +4,10 @@ import { loadSettings } from "./settings";
 import { toolsDefinition, executeTool } from "./tools";
 import { buildSystemPrompt } from "./prompts";
 import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui";
+import { getTaggedFiles, isImageFile, fileToDataUri } from "./context";
 
 export async function runAgentLoop(
-  userPrompt: string,
+  userPrompt: string | any[],
   history: any[] = [],
   quiet: boolean = false,
   signal?: AbortSignal,
@@ -22,16 +23,39 @@ export async function runAgentLoop(
 
   let activeTools = toolsDefinition;
   if (mode === "plan") {
-    // In plan mode, permit write_file ONLY for plan markdown files in .kloudia/plans/
     activeTools = toolsDefinition.filter(
       (t) => t.function.name !== "edit_file" && t.function.name !== "bash"
     );
   }
 
+  let userContent: any = userPrompt;
+
+  // Build multimodal payload if images are attached or tagged
+  if (typeof userPrompt === "string") {
+    const tagged = getTaggedFiles();
+    const imageParts: any[] = [];
+
+    for (const file of tagged) {
+      if (isImageFile(file)) {
+        try {
+          const dataUri = await fileToDataUri(file);
+          imageParts.push({
+            type: "image_url",
+            image_url: { url: dataUri },
+          });
+        } catch {}
+      }
+    }
+
+    if (imageParts.length > 0) {
+      userContent = [{ type: "text", text: userPrompt }, ...imageParts];
+    }
+  }
+
   const messages: any[] = [
     { role: "system", content: systemPrompt },
     ...history,
-    { role: "user", content: userPrompt },
+    { role: "user", content: userContent },
   ];
 
   let isHeaderPrinted = false;

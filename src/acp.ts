@@ -83,26 +83,36 @@ export async function startAcpServer(): Promise<void> {
       }
 
       if (msg.method === "session/prompt" || msg.method === "prompt") {
-        let userPrompt = "";
-        if (typeof msg.params?.prompt === "string") {
-          userPrompt = msg.params.prompt;
-        } else if (Array.isArray(msg.params?.prompt)) {
-          userPrompt = msg.params.prompt
-            .filter((p: any) => p.type === "text" || p.text)
-            .map((p: any) => p.text || p.content || "")
-            .join("\n");
+        let userPromptPayload: any = "";
+
+        if (Array.isArray(msg.params?.prompt)) {
+          const parts: any[] = [];
+          for (const item of msg.params.prompt) {
+            if (item.type === "text" || item.text) {
+              parts.push({ type: "text", text: item.text || item.content || "" });
+            } else if (item.type === "image" && item.data) {
+              const mime = item.mimeType || item.mime_type || "image/png";
+              parts.push({
+                type: "image_url",
+                image_url: { url: `data:${mime};base64,${item.data}` },
+              });
+            }
+          }
+          userPromptPayload = parts.length > 0 ? parts : "";
+        } else if (typeof msg.params?.prompt === "string") {
+          userPromptPayload = msg.params.prompt;
         } else if (msg.params?.message) {
-          userPrompt = typeof msg.params.message === "string" ? msg.params.message : JSON.stringify(msg.params.message);
+          userPromptPayload = typeof msg.params.message === "string" ? msg.params.message : JSON.stringify(msg.params.message);
         } else if (msg.params?.text) {
-          userPrompt = msg.params.text;
+          userPromptPayload = msg.params.text;
         }
 
-        debugLog(`PARSED PROMPT: "${userPrompt}"`);
+        debugLog(`PARSED ACP PROMPT PAYLOAD: ${JSON.stringify(userPromptPayload).slice(0, 150)}...`);
 
         const currentSessionId = msg.params?.sessionId || msg.params?.session_id || "acp-session";
 
         try {
-          const { response, updatedHistory } = await runAgentLoop(userPrompt, history, true);
+          const { response, updatedHistory } = await runAgentLoop(userPromptPayload, history, true);
           history = updatedHistory;
 
           debugLog(`AGENT RESPONSE: "${response.slice(0, 100)}..."`);
