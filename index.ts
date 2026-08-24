@@ -70,7 +70,6 @@ async function main() {
     logDivider();
     const skills = await discoverSkills();
     const commandList = [
-      { name: "/editor - Open system $EDITOR (Vim/Nano/Code) for multi-line prompts", value: "/editor" },
       { name: "/review - Run AI Code Review on uncommitted diff or file", value: "/review" },
       { name: "/reset-permissions - Reset session tool execution permissions", value: "/reset-permissions" },
       { name: "/quit - Exit Kloudia CLI", value: "/quit" },
@@ -104,7 +103,9 @@ async function main() {
       },
     ]);
 
-    const trimmed = (answer.input || "").trim();
+    // Unescape literal \n into real newlines for multi-line inputs
+    const unescaped = (answer.input || "").replace(/\\n/g, "\n");
+    const trimmed = unescaped.trim();
     if (!trimmed) continue;
 
     logDivider();
