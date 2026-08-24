@@ -1,20 +1,110 @@
 #!/usr/bin/env node
-import inquirer from "inquirer";
-import autocompletePrompt from "inquirer-autocomplete-prompt";
-import fuzzy from "fuzzy";
+import readline from "readline";
+import { select, isCancel } from "@clack/prompts";
 import pc from "picocolors";
 import { runAgentLoop } from "./src/agent";
 import { loadSession, saveSession, listSessions } from "./src/session";
 import { loadSettings } from "./src/settings";
 import { discoverSkills, loadSkillContent } from "./src/skills";
 import { runCodeReview } from "./src/review";
-import { resetPermissions } from "./src/tools";
 import { startAcpServer } from "./src/acp";
 import { setupZedIntegration } from "./src/zed";
+import { resetPermissions } from "./src/tools";
 import { logBanner, logDivider, logFooter } from "./src/ui";
 import pkg from "./package.json";
 
-inquirer.registerPrompt("autocomplete", autocompletePrompt);
+function promptMultiLine(): Promise<string> {
+  return new Promise((resolve) => {
+    let buffer = "";
+
+    const onData = async (charBuf: Buffer) => {
+      const str = charBuf.toString();
+
+      // Check Ctrl+C
+      if (str === "\u0003") {
+        cleanup();
+        console.log();
+        resolve("/quit");
+        return;
+      }
+
+      // Check Alt+Enter / Shift+Enter / Ctrl+J -> Insert newline
+      if (str === "\x1b\r" || str === "\x1b\n" || str === "\n" || str === "\x0a") {
+        buffer += "\n";
+        process.stdout.write("\n" + pc.bold(pc.gray("... ")));
+        return;
+      }
+
+      // Plain Enter -> Submit prompt
+      if (str === "\r") {
+        cleanup();
+        console.log();
+        resolve(buffer);
+        return;
+      }
+
+      // Handle Backspace
+      if (str === "\u007f" || str === "\b") {
+        if (buffer.length > 0) {
+          buffer = buffer.slice(0, -1);
+          process.stdout.write("\b \b");
+        }
+        return;
+      }
+
+      // Handle '/' trigger for slash menu on empty input
+      if (str === "/" && buffer.trim() === "") {
+        cleanup();
+        console.log("/");
+
+        const skills = await discoverSkills();
+        const options = [
+          { value: "/review", label: "/review", hint: "Run AI Code Review on uncommitted diff or file" },
+          { value: "/reset-permissions", label: "/reset-permissions", hint: "Reset session tool execution permissions" },
+          { value: "/quit", label: "/quit", hint: "Exit Kloudia CLI" },
+          { value: "/clear", label: "/clear", hint: "Clear terminal screen" },
+          { value: "/sessions", label: "/sessions", hint: "List saved sessions" },
+          ...skills.map((s) => ({
+            value: `/${s.name}`,
+            label: `/${s.name}`,
+            hint: s.description.slice(0, 50),
+          })),
+        ];
+
+        const selected = await select({
+          message: "Select a command or skill:",
+          options,
+        });
+
+        if (isCancel(selected)) {
+          resolve("");
+        } else {
+          resolve(selected as string);
+        }
+        return;
+      }
+
+      // Printable characters
+      if (str.length === 1 && str.charCodeAt(0) >= 32) {
+        buffer += str;
+        process.stdout.write(str);
+      }
+    };
+
+    const cleanup = () => {
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false);
+      }
+      process.stdin.removeListener("data", onData);
+    };
+
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+    }
+    process.stdin.resume();
+    process.stdout.write(pc.bold(pc.gray("> ")));
+  });
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -68,41 +158,9 @@ async function main() {
 
   while (true) {
     logDivider();
-    const skills = await discoverSkills();
-    const commandList = [
-      { name: "/review - Run AI Code Review on uncommitted diff or file", value: "/review" },
-      { name: "/reset-permissions - Reset session tool execution permissions", value: "/reset-permissions" },
-      { name: "/quit - Exit Kloudia CLI", value: "/quit" },
-      { name: "/clear - Clear terminal screen", value: "/clear" },
-      { name: "/sessions - List saved sessions", value: "/sessions" },
-      ...skills.map((s) => ({
-        name: `/${s.name} - ${s.description.slice(0, 50)}`,
-        value: `/${s.name}`,
-      })),
-    ];
+    const input = await promptMultiLine();
 
-    const answer = await inquirer.prompt([
-      {
-        type: "autocomplete",
-        name: "input",
-        message: ">",
-        suggestOnly: true,
-        searchText: "Searching...",
-        emptyText: "No matching commands or skills found.",
-        source: async (_: any, input: string) => {
-          input = input || "";
-          if (input.startsWith("/")) {
-            const results = fuzzy.filter(input, commandList, {
-              extract: (el) => el.value,
-            });
-            return results.map((el) => el.original);
-          }
-          return [];
-        },
-      },
-    ]);
-
-    const trimmed = (answer.input || "").trim();
+    const trimmed = input.trim();
     if (!trimmed) continue;
 
     logDivider();
