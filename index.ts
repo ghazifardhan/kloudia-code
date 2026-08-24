@@ -89,7 +89,12 @@ async function main() {
         suggestOnly: true,
         searchText: "Searching...",
         emptyText: "No matching commands or skills found.",
-        transformer: (val: string) => val,
+        transformer: (val: string) => {
+          if (val.includes("\\n")) {
+            return val.split("\\n").join("\n  ");
+          }
+          return val;
+        },
         source: async (_: any, input: string) => {
           input = input || "";
           if (input.startsWith("/")) {
