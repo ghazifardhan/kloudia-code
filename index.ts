@@ -70,6 +70,7 @@ async function main() {
     logDivider();
     const skills = await discoverSkills();
     const commandList = [
+      { name: "/editor - Open system $EDITOR (Vim/Nano/Code) for multi-line prompts", value: "/editor" },
       { name: "/review - Run AI Code Review on uncommitted diff or file", value: "/review" },
       { name: "/reset-permissions - Reset session tool execution permissions", value: "/reset-permissions" },
       { name: "/quit - Exit Kloudia CLI", value: "/quit" },
@@ -83,18 +84,13 @@ async function main() {
 
     const answer = await inquirer.prompt([
       {
-        type: "editor",
-        name: "input",
-        message: "Prompt (type or edit multi-line text):",
-        when: (answers: any) => false, // Fallback placeholder
-      },
-      {
         type: "autocomplete",
         name: "input",
         message: ">",
         suggestOnly: true,
         searchText: "Searching...",
         emptyText: "No matching commands or skills found.",
+        transformer: (val: string) => val,
         source: async (_: any, input: string) => {
           input = input || "";
           if (input.startsWith("/")) {
@@ -123,6 +119,46 @@ async function main() {
     if (trimmed === "/clear") {
       console.clear();
       logBanner(pkg.version || "1.0.0", modelName);
+      continue;
+    }
+
+    if (trimmed === "/editor") {
+      const edAnswer = await inquirer.prompt([
+        {
+          type: "editor",
+          name: "text",
+          message: "Write your multi-line prompt:",
+        },
+      ]);
+      const edTrimmed = (edAnswer.text || "").trim();
+      if (!edTrimmed) continue;
+      
+      try {
+        console.log(`\n${pc.bold(pc.white(edTrimmed))}`);
+        const controller = new AbortController();
+        let wasCancelled = false;
+        const sigintHandler = () => {
+          wasCancelled = true;
+          controller.abort();
+          console.log(pc.yellow("\n✖ Prompt cancelled by user (Ctrl+C)."));
+        };
+        process.on("SIGINT", sigintHandler);
+        try {
+          const { updatedHistory } = await runAgentLoop(edTrimmed, history, false, controller.signal);
+          if (!wasCancelled) {
+            history = updatedHistory;
+            await saveSession(sessionId, history);
+          }
+        } catch (err: any) {
+          if (!wasCancelled && !err.message?.includes("cancelled")) {
+            console.error(pc.red(`Error: ${err.message}`));
+          }
+        } finally {
+          process.off("SIGINT", sigintHandler);
+        }
+      } catch (err: any) {
+        console.error(pc.red(`Error: ${err.message}`));
+      }
       continue;
     }
 
