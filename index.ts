@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import inquirer from "inquirer";
 import pc from "picocolors";
+import path from "path";
 import { runAgentLoop } from "./src/agent";
 import { loadSession, saveSession, listSessions } from "./src/session";
 import { loadSettings } from "./src/settings";
@@ -11,6 +12,8 @@ import { setupZedIntegration } from "./src/zed";
 import { resetPermissions } from "./src/tools";
 import { logBanner, logDivider, logFooter } from "./src/ui";
 import { multilinePrompt } from "./src/multiline-prompt";
+import { addTaggedFile, removeTaggedFile, getTaggedFiles, clearTaggedFiles, listProjectFiles } from "./src/context";
+
 import pkg from "./package.json";
 
 async function main() {
@@ -68,9 +71,13 @@ async function main() {
   while (true) {
     logDivider();
     const skills = await discoverSkills();
+    const projectFiles = await listProjectFiles();
     const commandList = [
       { name: "/plan - Switch to Read-Only Plan mode (generate architectural spec)", value: "/plan" },
       { name: "/build - Switch to Implementation Build mode (full tool access)", value: "/build" },
+      { name: "/tag <file> - Tag a file to include in LLM context", value: "/tag" },
+      { name: "/untag <file> - Remove a tagged file from context", value: "/untag" },
+      { name: "/context - List or clear currently tagged files", value: "/context" },
       { name: "/review - Run AI Code Review on uncommitted diff or file", value: "/review" },
       { name: "/reset-permissions - Reset session tool execution permissions", value: "/reset-permissions" },
       { name: "/quit - Exit Kloudia CLI", value: "/quit" },
@@ -82,12 +89,28 @@ async function main() {
       })),
     ];
 
-    const input = await multilinePrompt({ commands: commandList });
+    const input = await multilinePrompt({
+      commands: commandList,
+      projectFiles,
+      model: modelName,
+      mode: currentMode,
+    });
     const trimmed = input.trim();
     if (!trimmed) continue;
 
     logDivider();
-    logFooter(modelName, currentMode);
+
+    // Auto-tag any @file mentioned in the input prompt
+    const atMentions = trimmed.match(/@([^\s]+)/g);
+    if (atMentions) {
+      for (const m of atMentions) {
+        const filePath = m.slice(1);
+        const resolved = addTaggedFile(filePath);
+        console.log(`${pc.gray("[Context]")} ${pc.green("✔ Auto-tagged file:")} ${pc.cyan(path.relative(process.cwd(), resolved))}`);
+      }
+    }
+
+
 
     if (trimmed === "/plan") {
       currentMode = "plan";
@@ -100,6 +123,53 @@ async function main() {
       console.log(`\n${pc.bold(pc.green("✔ Switched to BUILD mode"))} ${pc.gray("(Full implementation & tool access unlocked)")}`);
       continue;
     }
+
+    if (trimmed.startsWith("/tag")) {
+      const targetPath = trimmed.replace(/^\/tag\s*/, "").trim();
+      if (!targetPath) {
+        console.log(pc.yellow("\nUsage: /tag <filepath> (e.g. /tag src/index.ts)"));
+      } else {
+        const added = addTaggedFile(targetPath);
+        const rel = path.relative(process.cwd(), added);
+        console.log(`\n${pc.bold(pc.green("✔ Tagged file for context:"))} ${pc.cyan(rel)}`);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("/untag")) {
+      const targetPath = trimmed.replace(/^\/untag\s*/, "").trim();
+      if (!targetPath) {
+        console.log(pc.yellow("\nUsage: /untag <filepath>"));
+      } else {
+        const removed = removeTaggedFile(targetPath);
+        if (removed) {
+          console.log(`\n${pc.bold(pc.green("✔ Untagged file:"))} ${pc.cyan(targetPath)}`);
+        } else {
+          console.log(`\n${pc.yellow("⚠ File was not tagged:")} ${pc.cyan(targetPath)}`);
+        }
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("/context")) {
+      const sub = trimmed.replace(/^\/context\s*/, "").trim();
+      if (sub === "clear") {
+        clearTaggedFiles();
+        console.log(`\n${pc.bold(pc.green("✔ Cleared all tagged files from context."))}`);
+      } else {
+        const tagged = getTaggedFiles();
+        if (tagged.length === 0) {
+          console.log(`\n${pc.gray("No files tagged in context. Use /tag <filepath> to tag files.")}`);
+        } else {
+          console.log(`\n${pc.bold(pc.cyan("Currently Tagged Files in Context:"))}`);
+          tagged.forEach((f) => {
+            console.log(`  ${pc.green("•")} ${path.relative(process.cwd(), f)}`);
+          });
+        }
+      }
+      continue;
+    }
+
 
     if (trimmed === "/quit" || trimmed === "exit" || trimmed === "quit") {
       console.log(`\n${pc.green("✔")} Session saved (${pc.bold(sessionId)}). Resume anytime using:`);

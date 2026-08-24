@@ -1,5 +1,6 @@
 import pc from "picocolors";
 import fuzzy from "fuzzy";
+import { getResourceStats } from "./ui";
 
 // ── Types ───────────────────────────────────────────────────────────
 interface Command {
@@ -9,6 +10,9 @@ interface Command {
 
 interface MultilinePromptOptions {
   commands?: Command[];
+  projectFiles?: string[];
+  model?: string;
+  mode?: "build" | "plan";
 }
 
 // ── Multiline Prompt ────────────────────────────────────────────────
@@ -24,7 +28,7 @@ interface MultilinePromptOptions {
 //   • Delete          → forward-delete
 //   • Tab             → insert 2 spaces
 //   • Paste support   → multiline paste inserts newlines
-//   • Autocomplete    → when first line starts with /, shows matching commands
+//   • Autocomplete    → when first line starts with /, shows matching commands or @ file tagging
 export async function multilinePrompt(
   opts: MultilinePromptOptions = {},
 ): Promise<string> {
@@ -55,7 +59,7 @@ export async function multilinePrompt(
 
     function submit() {
       cleanup();
-      // Re-render final input cleanly (no suggestions, cursor at end)
+      // Re-render final input cleanly (no suggestions, no status bar, cursor at end)
       if (lastCursorLine > 0) {
         process.stdout.write(`\x1B[${lastCursorLine}A`);
       }
@@ -83,7 +87,7 @@ export async function multilinePrompt(
 
       let totalRendered = lines.length;
 
-      // Autocomplete suggestions (only when single line starting with /)
+      // Autocomplete suggestions for / commands
       if (
         lines.length === 1 &&
         lines[0].startsWith("/") &&
@@ -103,6 +107,39 @@ export async function multilinePrompt(
         }
       }
 
+      // Autocomplete suggestions for @ file tagging
+      const currentLineText = lines[cursorLine];
+      const textBeforeCursor = currentLineText.slice(0, cursorCol);
+      const atMatch = textBeforeCursor.match(/@([^\s]*)$/);
+      if (atMatch && opts.projectFiles && opts.projectFiles.length > 0) {
+        const query = atMatch[1];
+        const results = query
+          ? fuzzy.filter(query, opts.projectFiles)
+          : opts.projectFiles.slice(0, 5).map((f) => ({ original: f }));
+
+        const shown = results.slice(0, 5);
+        if (shown.length > 0) {
+          for (const r of shown) {
+            process.stdout.write(`  ${pc.cyan("@" + r.original)}\n`);
+            totalRendered++;
+          }
+        }
+      }
+
+      // Render footer status bar right below prompt/suggestions
+      if (opts.model) {
+        const mode = opts.mode || "build";
+        const left = pc.gray("? for shortcuts");
+        const stats = getResourceStats();
+        const modeTag = mode === "plan" ? pc.bold(pc.yellow("[PLAN]")) : pc.bold(pc.green("[BUILD]"));
+        const rightStr = `${modeTag} ${opts.model} · ${stats}`;
+        const rightPlain = `[${mode.toUpperCase()}] ${opts.model} · ${stats}`;
+        const columns = Math.min(process.stdout.columns || 80, 80);
+        const padding = Math.max(0, columns - 15 - rightPlain.length);
+        process.stdout.write(`${left}${" ".repeat(padding)}${rightStr}\n`);
+        totalRendered++;
+      }
+
       // Position terminal cursor at (cursorLine, cursorCol)
       const moveUp = totalRendered - cursorLine;
       if (moveUp > 0) {
@@ -113,6 +150,8 @@ export async function multilinePrompt(
 
       lastCursorLine = cursorLine;
     }
+
+
 
     // ── Input handler ─────────────────────────────────────────────
     function onData(buf: Buffer) {
@@ -310,16 +349,61 @@ export async function multilinePrompt(
           continue;
         }
 
-        // Tab → insert 2 spaces
+        // Tab → autocomplete @ file or / command, or insert 2 spaces
         if (code === 0x09) {
-          const curr = lines[cursorLine];
+          const currentLineText = lines[cursorLine];
+          const textBeforeCursor = currentLineText.slice(0, cursorCol);
+          const textAfterCursor = currentLineText.slice(cursorCol);
+
+          // 1. Check for @ file completion
+          const atMatch = textBeforeCursor.match(/@([^\s]*)$/);
+          if (atMatch && opts.projectFiles && opts.projectFiles.length > 0) {
+            const query = atMatch[1];
+            const results = query
+              ? fuzzy.filter(query, opts.projectFiles)
+              : opts.projectFiles.map((f) => ({ original: f }));
+
+            if (results.length > 0) {
+              const bestMatch = results[0].original;
+              const matchIndex = atMatch.index ?? (textBeforeCursor.length - atMatch[0].length);
+              const beforeAt = textBeforeCursor.slice(0, matchIndex);
+              const completed = `@${bestMatch} `;
+              lines[cursorLine] = beforeAt + completed + textAfterCursor;
+              cursorCol = beforeAt.length + completed.length;
+              render();
+              i++;
+              continue;
+            }
+          }
+
+          // 2. Check for / command completion (single line starting with /)
+          if (
+            lines.length === 1 &&
+            lines[0].startsWith("/") &&
+            opts.commands
+          ) {
+            const results = fuzzy.filter(lines[0], opts.commands, {
+              extract: (el) => el.value,
+            });
+            if (results.length > 0) {
+              const bestCmd = results[0].original.value;
+              lines[0] = bestCmd + " ";
+              cursorCol = lines[0].length;
+              render();
+              i++;
+              continue;
+            }
+          }
+
+          // Default Tab behavior: insert 2 spaces
           lines[cursorLine] =
-            curr.slice(0, cursorCol) + "  " + curr.slice(cursorCol);
+            textBeforeCursor + "  " + textAfterCursor;
           cursorCol += 2;
           render();
           i++;
           continue;
         }
+
 
         // Regular printable character (>= space)
         if (code >= 0x20) {

@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import { loadProjectMemory } from "./memory";
 import { buildAvailableSkillsPrompt } from "./skills";
 import { Settings } from "./settings";
+import { buildTaggedFilesContext } from "./context";
 
 export async function buildSystemPrompt(settings: Settings, mode: "build" | "plan" = "build"): Promise<string> {
   if (settings.systemPrompt) {
@@ -29,6 +30,7 @@ export async function buildSystemPrompt(settings: Settings, mode: "build" | "pla
 
   const memory = await loadProjectMemory();
   const availableSkills = await buildAvailableSkillsPrompt();
+  const taggedFilesContext = await buildTaggedFilesContext();
 
   const modeInstructions =
     mode === "plan"
@@ -56,5 +58,6 @@ ${modeInstructions}
 3. When editing code, preserve surrounding indentation and formatting.
 4. Delegate complex sub-tasks to isolated sub-agents via the \`task\` tool.
 5. Use the \`skill\` tool to load detailed specialized instructions whenever a user request matches available skills.
-${envContext}${memory}${availableSkills}`;
+${envContext}${memory}${availableSkills}${taggedFilesContext}`;
 }
+
