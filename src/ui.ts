@@ -58,13 +58,15 @@ export function getResourceStats(): string {
   return `${ramMB} MB · CPU ${cpuPercent}%`;
 }
 
-export function logFooter(model: string) {
+export function logFooter(model: string, mode: "build" | "plan" = "build") {
   const left = pc.gray("? for shortcuts");
   const stats = getResourceStats();
-  const right = pc.gray(`${model} · ${stats}`);
+  const modeTag = mode === "plan" ? pc.bold(pc.yellow("[PLAN]")) : pc.bold(pc.green("[BUILD]"));
+  const rightStr = `${modeTag} ${model} · ${stats}`;
+  const rightPlain = `[${mode.toUpperCase()}] ${model} · ${stats}`;
   const columns = Math.min(process.stdout.columns || 80, 80);
-  const padding = Math.max(0, columns - 15 - (`${model} · ${stats}`.length));
-  console.log(`${left}${" ".repeat(padding)}${right}`);
+  const padding = Math.max(0, columns - 15 - rightPlain.length);
+  console.log(`${left}${" ".repeat(padding)}${rightStr}`);
 }
 
 function formatToolAction(name: string, rawArgs?: string): string {

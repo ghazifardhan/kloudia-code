@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 import inquirer from "inquirer";
-import autocompletePrompt from "inquirer-autocomplete-prompt";
-import fuzzy from "fuzzy";
 import pc from "picocolors";
 import { runAgentLoop } from "./src/agent";
 import { loadSession, saveSession, listSessions } from "./src/session";
@@ -12,9 +10,8 @@ import { startAcpServer } from "./src/acp";
 import { setupZedIntegration } from "./src/zed";
 import { resetPermissions } from "./src/tools";
 import { logBanner, logDivider, logFooter } from "./src/ui";
+import { multilinePrompt } from "./src/multiline-prompt";
 import pkg from "./package.json";
-
-inquirer.registerPrompt("autocomplete", autocompletePrompt);
 
 async function main() {
   const args = process.argv.slice(2);
@@ -66,10 +63,14 @@ async function main() {
 
   logBanner(pkg.version || "1.0.0", modelName);
 
+  let currentMode: "build" | "plan" = "build";
+
   while (true) {
     logDivider();
     const skills = await discoverSkills();
     const commandList = [
+      { name: "/plan - Switch to Read-Only Plan mode (generate architectural spec)", value: "/plan" },
+      { name: "/build - Switch to Implementation Build mode (full tool access)", value: "/build" },
       { name: "/review - Run AI Code Review on uncommitted diff or file", value: "/review" },
       { name: "/reset-permissions - Reset session tool execution permissions", value: "/reset-permissions" },
       { name: "/quit - Exit Kloudia CLI", value: "/quit" },
@@ -81,40 +82,24 @@ async function main() {
       })),
     ];
 
-    const answer = await inquirer.prompt([
-      {
-        type: "autocomplete",
-        name: "input",
-        message: ">",
-        suggestOnly: true,
-        searchText: "Searching...",
-        emptyText: "No matching commands or skills found.",
-        transformer: (val: string) => {
-          if (val.includes("\\n")) {
-            return val.split("\\n").join("\n  ");
-          }
-          return val;
-        },
-        source: async (_: any, input: string) => {
-          input = input || "";
-          if (input.startsWith("/")) {
-            const results = fuzzy.filter(input, commandList, {
-              extract: (el) => el.value,
-            });
-            return results.map((el) => el.original);
-          }
-          return [];
-        },
-      },
-    ]);
-
-    // Unescape literal \n into real newlines for multi-line inputs
-    const unescaped = (answer.input || "").replace(/\\n/g, "\n");
-    const trimmed = unescaped.trim();
+    const input = await multilinePrompt({ commands: commandList });
+    const trimmed = input.trim();
     if (!trimmed) continue;
 
     logDivider();
-    logFooter(modelName);
+    logFooter(modelName, currentMode);
+
+    if (trimmed === "/plan") {
+      currentMode = "plan";
+      console.log(`\n${pc.bold(pc.yellow("✔ Switched to PLAN mode"))} ${pc.gray("(Read-Only architectural planning + .kloudia/plans/ artifact generation)")}`);
+      continue;
+    }
+
+    if (trimmed === "/build") {
+      currentMode = "build";
+      console.log(`\n${pc.bold(pc.green("✔ Switched to BUILD mode"))} ${pc.gray("(Full implementation & tool access unlocked)")}`);
+      continue;
+    }
 
     if (trimmed === "/quit" || trimmed === "exit" || trimmed === "quit") {
       console.log(`\n${pc.green("✔")} Session saved (${pc.bold(sessionId)}). Resume anytime using:`);
@@ -216,7 +201,7 @@ async function main() {
       process.on("SIGINT", sigintHandler);
 
       try {
-        const { updatedHistory } = await runAgentLoop(promptToRun, history, false, controller.signal);
+        const { updatedHistory } = await runAgentLoop(promptToRun, history, false, controller.signal, currentMode);
         if (!wasCancelled) {
           history = updatedHistory;
           await saveSession(sessionId, history);

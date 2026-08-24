@@ -9,7 +9,8 @@ export async function runAgentLoop(
   userPrompt: string,
   history: any[] = [],
   quiet: boolean = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  mode: "build" | "plan" = "build"
 ): Promise<{ response: string; updatedHistory: any[] }> {
   const settings = await loadSettings();
   const client = new OpenAI({
@@ -17,7 +18,15 @@ export async function runAgentLoop(
     baseURL: settings.baseUrl,
   });
 
-  const systemPrompt = await buildSystemPrompt(settings);
+  const systemPrompt = await buildSystemPrompt(settings, mode);
+
+  let activeTools = toolsDefinition;
+  if (mode === "plan") {
+    // In plan mode, permit write_file ONLY for plan markdown files in .kloudia/plans/
+    activeTools = toolsDefinition.filter(
+      (t) => t.function.name !== "edit_file" && t.function.name !== "bash"
+    );
+  }
 
   const messages: any[] = [
     { role: "system", content: systemPrompt },
@@ -36,7 +45,7 @@ export async function runAgentLoop(
       {
         model: settings.model || "gpt-4o",
         messages,
-        tools: toolsDefinition,
+        tools: activeTools,
         stream: true,
       },
       { signal }
