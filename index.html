@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kloudia Code — CLI Harness for AI Engineers</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre, .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-[#0c0d0e] text-[#ce3f2] min-h-screen flex flex-col antialiased selection:bg-[#fff] selection:text-[#000]">
+
+  <!-- Top bar -->
+  <header class="border-b border-[#1d1f21] bg-[#0c0d0e]">
+    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="mono font-bold text-sm tracking-tight text-white">$ kloudia</span>
+        <span class="text-xs border border-[#2b2e33] text-[#868d98] px-1.5 py-0.5 rounded font-mono">v1.9.0</span>
+      </div>
+      <nav class="flex items-center gap-6 text-xs font-mono text-[#868d98]">
+        <a href="#features" class="hover:text-white transition">features</a>
+        <a href="#quickstart" class="hover:text-white transition">quickstart</a>
+        <a href="#config" class="hover:text-white transition">config</a>
+        <a href="https://github.com" target="_blank" rel="noopener" class="text-white hover:text-[#868d98] transition">github</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="flex-1">
+    <!-- Hero -->
+    <section class="max-w-5xl mx-auto px-6 pt-20 pb-16">
+      <div class="max-w-2xl">
+        <div class="mono text-xs text-[#868d98] mb-4">// local-first agent harness</div>
+        <h1 class="text-4xl sm:text-5xl font-bold text-white tracking-tight leading-none mb-6">
+          Terminal-native AI coding agent. Zero bloat.
+        </h1>
+        <p class="text-base text-[#868d98] leading-relaxed mb-8">
+          Multi-agent orchestration, streaming completions, skills discovery, and persistent session state. Powered by Bun.
+        </p>
+
+        <!-- Command snippet -->
+        <div class="inline-flex items-center gap-3 bg-[#141618] border border-[#24272c] rounded-md p-1.5 pl-3 font-mono text-xs">
+          <span class="text-[#868d98]">$</span>
+          <span class="text-white">npm i -g kloudia-code</span>
+          <button onclick="navigator.clipboard.writeText('npm i -g kloudia-code'); this.innerText='copied'; setTimeout(()=>this.innerText='copy', 1500)" class="bg-[#24272c] hover:bg-[#32363e] text-white px-2.5 py-1 rounded text-xs transition cursor-pointer border border-[#32363e]">
+            copy
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Terminal Mock -->
+    <section class="max-w-5xl mx-auto px-6 mb-20">
+      <div class="bg-[#121417] border border-[#24272c] rounded-md overflow-hidden">
+        <div class="bg-[#181a1d] px-4 py-2 border-b border-[#24272c] flex items-center justify-between text-xs font-mono text-[#868d98]">
+          <span>tty1 — kloudia</span>
+          <span>REPL</span>
+        </div>
+        <div class="p-5 font-mono text-xs space-y-3 leading-relaxed text-[#c5c9d0]">
+          <div>
+            <span class="text-[#868d98]">$</span> kloudia "refactor auth middleware to use bun native serve"
+          </div>
+          <div class="text-[#868d98]">
+            &gt; loaded .kloudia/MEMORY.md (142 tokens)<br>
+            &gt; discovered 4 active skills in ~/.agents/skills<br>
+            &gt; spawning sub-agent: code-review
+          </div>
+          <div class="text-white border-l border-[#3a3f47] pl-3 py-0.5">
+            ✓ replaced express with Bun.serve()<br>
+            ✓ verified 12 tests passing via bun test
+          </div>
+          <div class="flex items-center gap-2 pt-1">
+            <span class="text-white font-bold">kloudia &gt;</span>
+            <span class="bg-[#ce3f2] text-[#0c0d0e] px-1 font-bold">/</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Specs Matrix -->
+    <section id="features" class="max-w-5xl mx-auto px-6 py-12 border-t border-[#1d1f21]">
+      <div class="mono text-xs text-[#868d98] mb-8">// capabilities</div>
+      <div class="grid md:grid-cols-2 gap-8 text-xs font-mono">
+        <div class="border border-[#1d1f21] p-4 bg-[#121417]">
+          <div class="text-white font-bold mb-1">01 / Sub-Agent Delegation</div>
+          <div class="text-[#868d98] leading-relaxed">
+            Orchestrator delegates distinct sub-tasks to isolated sub-agents via standard `task` calls.
+          </div>
+        </div>
+        <div class="border border-[#1d1f21] p-4 bg-[#121417]">
+          <div class="text-white font-bold mb-1">02 / Dynamic Skills Engine</div>
+          <div class="text-[#868d98] leading-relaxed">
+            Reads `SKILL.md` instruction sets from global and workspace configurations automatically.
+          </div>
+        </div>
+        <div class="border border-[#1d1f21] p-4 bg-[#121417]">
+          <div class="text-white font-bold mb-1">03 / Project Context Memory</div>
+          <div class="text-[#868d98] leading-relaxed">
+            Injects `CLAUDE.md`, `AGENTS.md`, or `.kloudia/MEMORY.md` straight into prompt context.
+          </div>
+        </div>
+        <div class="border border-[#1d1f21] p-4 bg-[#121417]">
+          <div class="text-white font-bold mb-1">04 / Session Persistence</div>
+          <div class="text-[#868d98] leading-relaxed">
+            Conversation history saved per session ID. Resume or list active sessions anytime.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Config snippet -->
+    <section id="config" class="max-w-5xl mx-auto px-6 py-12 border-t border-[#1d1f21]">
+      <div class="mono text-xs text-[#868d98] mb-4">// configuration ~/.config/kloudia/settings.json</div>
+      <pre class="bg-[#121417] border border-[#1d1f21] p-4 text-xs font-mono text-[#868d98] overflow-x-auto"><code>{
+  <span class="text-white">"apiKey"</span>: <span class="text-[#c5c9d0]">"sk-..."</span>,
+  <span class="text-white">"baseUrl"</span>: <span class="text-[#c5c9d0]">"https://api.openai.com/v1"</span>,
+  <span class="text-white">"model"</span>: <span class="text-[#c5c9d0]">"gpt-4o"</span>
+}</code></pre>
+    </section>
+  </main>
+
+  <footer class="border-t border-[#1d1f21] py-6 text-center text-xs font-mono text-[#868d98]">
+    Kloudia Code — MIT License
+  </footer>
+
+</body>
+</html>
