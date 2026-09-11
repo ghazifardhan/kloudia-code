@@ -74,23 +74,23 @@ function formatToolAction(name: string, rawArgs?: string): string {
     const args = JSON.parse(rawArgs || "{}");
     switch (name) {
       case "read_file":
-        return `Read ${args.path || "file"}`;
+        return `Read ${args.path || args.file || args.filename || "file"}`;
       case "write_file":
-        return `Wrote ${args.path || "file"}`;
+        return `Write ${args.path || "file"}`;
       case "edit_file":
-        return `Edited ${args.path || "file"}`;
+        return `Edit ${args.path || "file"}`;
       case "ls":
-        return `Listed ${args.path || "current directory"}`;
+        return `List ${args.path || "current directory"}`;
       case "cd":
-        return `Changed directory to ${args.path || "home"}`;
+        return `Change directory to ${args.path || "home"}`;
       case "bash":
-        return `Ran command: ${args.command || ""}`;
+        return `Bash ${args.command || ""}`;
       case "git":
-        return `Ran git ${(args.args || []).join(" ")}`;
+        return `Git ${(args.args || []).join(" ")}`;
       case "task":
-        return `Delegated sub-task: ${args.prompt || ""}`;
+        return `Delegate task: ${args.prompt || ""}`;
       case "skill":
-        return `Loaded skill: ${args.name || ""}`;
+        return `Load skill: ${args.name || ""}`;
       default:
         return `${name} ${rawArgs || ""}`;
     }
@@ -109,7 +109,7 @@ export function startToolProgress(name: string, detail?: string) {
   process.stdout.write("\x1B[?25l");
   const timer = setInterval(() => {
     const frame = pc.cyan(frames[i % frames.length]);
-    process.stdout.write(`\r  ${frame} ${pc.white(actionText)}\x1B[K`);
+    process.stdout.write(`\r  ${pc.magenta("●")} ${pc.bold(pc.white(actionText))} ${frame}\x1B[K`);
     i++;
   }, 80);
   activeSpinner = { timer };
@@ -124,7 +124,8 @@ export function stopToolProgress(name?: string, rawArgs?: string, success: boole
     if (name) {
       const actionText = formatToolAction(name, rawArgs);
       const icon = success ? pc.green("✔") : pc.red("✖");
-      console.log(`  ${icon} ${pc.gray(actionText)}`);
+      console.log(`  ${pc.magenta("●")} ${pc.bold(pc.white(actionText))}`);
+      console.log(`    ${pc.gray("└─")} ${icon} ${pc.gray(success ? "Done" : "Failed")}`);
     }
   }
 }

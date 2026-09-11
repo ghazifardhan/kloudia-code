@@ -67,7 +67,7 @@ export async function multilinePrompt(
       }
       process.stdout.write("\r\x1B[J");
       for (let i = 0; i < lines.length; i++) {
-        const prefix = i === 0 ? `${pc.green(">")} ` : "  ";
+        const prefix = i === 0 ? `${pc.bold(pc.magenta(">"))} ` : "  ";
         process.stdout.write(`${prefix}${lines[i]}\n`);
       }
       resolve(lines.join("\n"));
@@ -99,7 +99,7 @@ export async function multilinePrompt(
           targetCursorRowIndex = totalRenderedRows + subRow;
         }
 
-        const prefix = i === 0 ? `${pc.green(">")} ` : "  ";
+        const prefix = i === 0 ? `${pc.bold(pc.magenta(">"))} ` : "  ";
         process.stdout.write(`${prefix}${lines[i]}\n`);
         totalRenderedRows += lineRows;
       }
@@ -143,16 +143,19 @@ export async function multilinePrompt(
         }
       }
 
-      // Render footer status bar right below prompt/suggestions
+      // Render bottom divider & footer status bar right below prompt/suggestions
       if (opts.model) {
+        const width = Math.min(cols, 80);
+        process.stdout.write(pc.gray("─".repeat(width)) + "\n");
+        totalRenderedRows++;
+
         const mode = opts.mode || "build";
         const left = pc.gray("? for shortcuts");
         const stats = getResourceStats();
         const modeTag = mode === "plan" ? pc.bold(pc.yellow("[PLAN]")) : pc.bold(pc.green("[BUILD]"));
         const rightStr = `${modeTag} ${opts.model} · ${stats}`;
         const rightPlain = `[${mode.toUpperCase()}] ${opts.model} · ${stats}`;
-        const columns = Math.min(cols, 80);
-        const padding = Math.max(0, columns - 15 - rightPlain.length);
+        const padding = Math.max(0, width - 15 - rightPlain.length);
         process.stdout.write(`${left}${" ".repeat(padding)}${rightStr}\n`);
         totalRenderedRows++;
       }
