@@ -65,6 +65,10 @@ export async function runAgentLoop(
       throw new Error("Prompt cancelled by user.");
     }
 
+    if (!quiet) {
+      startToolProgress("Thinking...");
+    }
+
     const stream = await client.chat.completions.create(
       {
         model: settings.model || "gpt-4o",
@@ -77,8 +81,13 @@ export async function runAgentLoop(
 
     let fullContent = "";
     let toolCallsBuffer: any[] = [];
+    let spinnerStopped = false;
 
     for await (const chunk of stream) {
+      if (!spinnerStopped && !quiet) {
+        stopToolProgress();
+        spinnerStopped = true;
+      }
       const delta = chunk.choices[0]?.delta;
       if (delta?.content) {
         fullContent += delta.content;
@@ -96,6 +105,11 @@ export async function runAgentLoop(
       }
     }
 
+    if (!spinnerStopped && !quiet) {
+      stopToolProgress();
+      spinnerStopped = true;
+    }
+
     if (fullContent && !quiet) {
       if (!isHeaderPrinted) {
         console.log(`\n${pc.bold(pc.magenta("✦ Kloudia"))}`);
@@ -104,9 +118,11 @@ export async function runAgentLoop(
       console.log(renderMarkdown(fullContent));
     }
 
+    const validToolCalls = toolCallsBuffer.filter((t) => t && t.function);
+
     const assistantMsg: any = { role: "assistant", content: fullContent || null };
-    if (toolCallsBuffer.length > 0) {
-      assistantMsg.tool_calls = toolCallsBuffer.map((t) => ({
+    if (validToolCalls.length > 0) {
+      assistantMsg.tool_calls = validToolCalls.map((t) => ({
         id: t.id,
         type: "function",
         function: t.function,
@@ -114,12 +130,12 @@ export async function runAgentLoop(
     }
     messages.push(assistantMsg);
 
-    if (toolCallsBuffer.length === 0) {
+    if (validToolCalls.length === 0) {
       const historyToSave = messages.filter((m) => m.role !== "system");
       return { response: fullContent, updatedHistory: historyToSave };
     }
 
-    for (const call of toolCallsBuffer) {
+    for (const call of validToolCalls) {
       if (signal?.aborted) {
         throw new Error("Prompt cancelled by user.");
       }
@@ -180,7 +196,12 @@ export async function runSubAgent(prompt: string, role?: string): Promise<string
     }
 
     for (const call of msg.tool_calls) {
-      const result = await executeTool(call.function.name, JSON.parse(call.function.arguments));
+      if (!call || !call.function) continue;
+      let args = {};
+      try {
+        args = JSON.parse(call.function.arguments || "{}");
+      } catch {}
+      const result = await executeTool(call.function.name, args);
       messages.push({
         role: "tool",
         tool_call_id: call.id,

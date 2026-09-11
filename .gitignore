@@ -33,3 +33,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Scraper output & scripts
+scrape_churches.ts
+churches_depok.csv
+churches_depok.json
+

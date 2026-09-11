@@ -42,6 +42,7 @@ export async function multilinePrompt(
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdout.write("\x1B[?25h"); // ensure cursor visible
+    process.stdout.write("\x1B[?2004h"); // enable bracketed paste mode
 
     // ── Helpers ───────────────────────────────────────────────────
     function insertNewline() {
@@ -53,6 +54,7 @@ export async function multilinePrompt(
     }
 
     function cleanup() {
+      process.stdout.write("\x1B[?2004l"); // disable bracketed paste mode
       process.stdin.removeListener("data", onData);
       process.stdin.setRawMode(wasRaw ?? false);
     }
@@ -79,13 +81,28 @@ export async function multilinePrompt(
       }
       process.stdout.write("\r\x1B[J"); // go to col 1, clear to end of screen
 
-      // Draw prompt lines
+      // Calculate total terminal rows rendered (taking terminal width line wrapping into account)
+      const cols = process.stdout.columns || 80;
+      let totalRenderedRows = 0;
+      let targetCursorRowIndex = 0; // zero-based row offset from top of prompt output
+
       for (let i = 0; i < lines.length; i++) {
+        const prefixLen = 2; // "> " or "  "
+        const lineLen = prefixLen + lines[i].length;
+        const lineRows = Math.max(1, Math.ceil(lineLen / cols));
+
+        if (i === cursorLine) {
+          // Absolute visual cursor column offset (0-indexed)
+          const absCol = prefixLen + cursorCol;
+          // Row within this logical line (0-indexed)
+          const subRow = Math.floor(absCol / cols);
+          targetCursorRowIndex = totalRenderedRows + subRow;
+        }
+
         const prefix = i === 0 ? `${pc.green(">")} ` : "  ";
         process.stdout.write(`${prefix}${lines[i]}\n`);
+        totalRenderedRows += lineRows;
       }
-
-      let totalRendered = lines.length;
 
       // Autocomplete suggestions for / commands
       if (
@@ -102,7 +119,7 @@ export async function multilinePrompt(
         if (shown.length > 0) {
           for (const r of shown) {
             process.stdout.write(`  ${pc.gray(r.original.name)}\n`);
-            totalRendered++;
+            totalRenderedRows++;
           }
         }
       }
@@ -121,7 +138,7 @@ export async function multilinePrompt(
         if (shown.length > 0) {
           for (const r of shown) {
             process.stdout.write(`  ${pc.cyan("@" + r.original)}\n`);
-            totalRendered++;
+            totalRenderedRows++;
           }
         }
       }
@@ -134,33 +151,51 @@ export async function multilinePrompt(
         const modeTag = mode === "plan" ? pc.bold(pc.yellow("[PLAN]")) : pc.bold(pc.green("[BUILD]"));
         const rightStr = `${modeTag} ${opts.model} · ${stats}`;
         const rightPlain = `[${mode.toUpperCase()}] ${opts.model} · ${stats}`;
-        const columns = Math.min(process.stdout.columns || 80, 80);
+        const columns = Math.min(cols, 80);
         const padding = Math.max(0, columns - 15 - rightPlain.length);
         process.stdout.write(`${left}${" ".repeat(padding)}${rightStr}\n`);
-        totalRendered++;
+        totalRenderedRows++;
       }
 
-      // Position terminal cursor at (cursorLine, cursorCol)
-      const moveUp = totalRendered - cursorLine;
+      // Position terminal cursor at exact visual position
+      const moveUp = totalRenderedRows - targetCursorRowIndex;
       if (moveUp > 0) {
         process.stdout.write(`\x1B[${moveUp}A`);
       }
-      // +3: prefix is 2 visual chars (">" or "  ") + 1 for 1-indexed column
-      process.stdout.write(`\x1B[${cursorCol + 3}G`);
 
-      lastCursorLine = cursorLine;
+      const prefixLen = 2;
+      const absCol = prefixLen + cursorCol;
+      const targetColIndex = (absCol % cols) + 1; // 1-indexed column
+      process.stdout.write(`\x1B[${targetColIndex}G`);
+
+      // Remember how many rows up from the cursor the prompt header is, for the next render pass
+      lastCursorLine = targetCursorRowIndex;
     }
 
 
 
+    let inPasteMode = false;
+
     // ── Input handler ─────────────────────────────────────────────
     function onData(buf: Buffer) {
       const str = buf.toString("utf8");
-      // If multiple chars arrive at once and it's not an escape seq, it's a paste
-      const isPaste = str.length > 1 && !str.startsWith("\x1B");
 
       let i = 0;
       while (i < str.length) {
+        // Bracketed paste start: \x1b[200~
+        if (str.startsWith("\x1b[200~", i)) {
+          inPasteMode = true;
+          i += 6;
+          continue;
+        }
+        // Bracketed paste end: \x1b[201~
+        if (str.startsWith("\x1b[201~", i)) {
+          inPasteMode = false;
+          render();
+          i += 6;
+          continue;
+        }
+
         const code = str.charCodeAt(i);
 
         // Ctrl+C → exit
@@ -183,8 +218,7 @@ export async function multilinePrompt(
 
         // Enter / CR (0x0D)
         if (code === 0x0d) {
-          if (isPaste) {
-            // In paste, \r is followed by \n – skip \r, let \n handle newline
+          if (inPasteMode) {
             i++;
             continue;
           }
@@ -195,7 +229,7 @@ export async function multilinePrompt(
         // LF (0x0A) → Ctrl+J or paste newline
         if (code === 0x0a) {
           insertNewline();
-          render();
+          if (!inPasteMode) render();
           i++;
           continue;
         }

@@ -257,8 +257,6 @@ async function main() {
     }
 
     try {
-      console.log(`\n${pc.bold(pc.white(trimmed))}`);
-
       const controller = new AbortController();
       let wasCancelled = false;
 
