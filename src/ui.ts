@@ -25,8 +25,23 @@ export function renderMarkdown(text: string): string {
 export function logBanner(version: string, model: string) {
   const cwd = process.cwd().replace(os.homedir(), "~");
 
+  const logoLines = [
+    "   __ __ __                 ___       ",
+    "  / //_// /___  __  ______ / (_)___ _ ",
+    " / ,<  / / __ \\/ / / / __  / / / __ `/",
+    "/ /| |/ / /_/ / /_/ / /_/ / / / /_/ / ",
+    "\\/ |_/_/\\____/\\__,_/\\__,_/_/_/\\__,_/  ",
+  ];
+
   console.log();
-  console.log(`  ${pc.bold(pc.magenta("✦ Kloudia"))} ${pc.gray(`v${version}`)} ${pc.gray("·")} ${pc.gray(model)}`);
+  for (let i = 0; i < logoLines.length; i++) {
+    if (i === 4) {
+      console.log(`  ${pc.magenta(logoLines[i])} ${pc.gray(`v${version}`)} ${pc.gray("·")} ${pc.cyan(model)}`);
+    } else {
+      console.log(`  ${pc.magenta(logoLines[i])}`);
+    }
+  }
+  console.log();
   console.log(`  ${pc.gray(cwd)}`);
   console.log();
 }
