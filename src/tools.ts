@@ -187,13 +187,35 @@ export async function executeTool(name: string, args: Record<string, any>, runSu
       }
       case "bash": {
         if (!(await askPermission(`bash: ${args.command}`))) return "Permission denied by user.";
-        const proc = spawnSync("sh", ["-c", args.command], { encoding: "utf-8" });
+        const proc = spawnSync("sh", ["-c", args.command], {
+          encoding: "utf-8",
+          timeout: 60000,
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, PAGER: "cat", GIT_PAGER: "cat", TERM: "dumb" },
+        });
+        if (proc.error) {
+          if ((proc.error as any).code === "ETIMEDOUT") {
+            return "Error: Command execution timed out after 60 seconds. Long-running servers or interactive commands cannot be run synchronously.";
+          }
+          return `Command error: ${proc.error.message}`;
+        }
         const stdout = proc.stdout || "";
         const stderr = proc.stderr || "";
         return stderr ? `${stdout}\nSTDERR:\n${stderr}` : stdout;
       }
       case "git": {
-        const proc = spawnSync("git", args.args || [], { encoding: "utf-8" });
+        const proc = spawnSync("git", args.args || [], {
+          encoding: "utf-8",
+          timeout: 60000,
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, GIT_PAGER: "cat", PAGER: "cat", TERM: "dumb" },
+        });
+        if (proc.error) {
+          if ((proc.error as any).code === "ETIMEDOUT") {
+            return "Error: Git command timed out after 60 seconds.";
+          }
+          return `Git error: ${proc.error.message}`;
+        }
         return proc.stdout || proc.stderr || "";
       }
       case "task": {

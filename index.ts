@@ -45,18 +45,26 @@ async function main() {
   }
 
   let sessionId = `session-${Date.now()}`;
+  const isNew = args.includes("--new") || args.includes("-n");
+  const newIdx = args.findIndex((a) => a === "--new" || a === "-n");
+  if (newIdx !== -1) args.splice(newIdx, 1);
 
   const resumeIdx = args.findIndex((a) => a === "--resume" || a === "-r" || a === "--session" || a === "-s");
   if (resumeIdx !== -1 && args[resumeIdx + 1]) {
     sessionId = args[resumeIdx + 1];
     args.splice(resumeIdx, 2);
+  } else if (!isNew) {
+    const existingSessions = await listSessions();
+    if (existingSessions.length > 0) {
+      sessionId = existingSessions[0].id;
+    }
   }
 
   let history = await loadSession(sessionId);
 
   if (args.length > 0) {
     const prompt = args.join(" ");
-    const { updatedHistory } = await runAgentLoop(prompt, history);
+    const { updatedHistory } = await runAgentLoop(prompt, history, false, undefined, "build", sessionId);
     await saveSession(sessionId, updatedHistory);
     process.exit(0);
   }
@@ -65,6 +73,11 @@ async function main() {
   const modelName = settings.model || "gpt-4o";
 
   logBanner(pkg.version || "1.0.0", modelName);
+  if (history.length > 0) {
+    console.log(`  ${pc.gray(`Active session: ${pc.cyan(sessionId)} (${history.length} messages loaded). Use --new to start a fresh session.`)}\n`);
+  } else {
+    console.log(`  ${pc.gray(`Session: ${pc.cyan(sessionId)}`)}\n`);
+  }
 
   let currentMode: "build" | "plan" = "build";
 
@@ -73,6 +86,7 @@ async function main() {
     const skills = await discoverSkills();
     const projectFiles = await listProjectFiles();
     const commandList = [
+      { name: "/new - Start a fresh conversation session", value: "/new" },
       { name: "/plan - Switch to Read-Only Plan mode (generate architectural spec)", value: "/plan" },
       { name: "/build - Switch to Implementation Build mode (full tool access)", value: "/build" },
       { name: "/tag <file> - Tag a file to include in LLM context", value: "/tag" },
@@ -110,7 +124,12 @@ async function main() {
       }
     }
 
-
+    if (trimmed === "/new") {
+      sessionId = `session-${Date.now()}`;
+      history = [];
+      console.log(`\n${pc.bold(pc.green("✔ Switched to new session:"))} ${pc.cyan(sessionId)}`);
+      continue;
+    }
 
     if (trimmed === "/plan") {
       currentMode = "plan";
@@ -205,15 +224,13 @@ async function main() {
         };
         process.on("SIGINT", sigintHandler);
         try {
-          const { updatedHistory } = await runAgentLoop(edTrimmed, history, false, controller.signal);
-          if (!wasCancelled) {
-            history = updatedHistory;
-            await saveSession(sessionId, history);
-          }
+          const { updatedHistory } = await runAgentLoop(edTrimmed, history, false, controller.signal, currentMode, sessionId);
+          history = updatedHistory;
         } catch (err: any) {
           if (!wasCancelled && !err.message?.includes("cancelled")) {
             console.error(pc.red(`Error: ${err.message}`));
           }
+          history = await loadSession(sessionId);
         } finally {
           process.off("SIGINT", sigintHandler);
         }
@@ -269,15 +286,13 @@ async function main() {
       process.on("SIGINT", sigintHandler);
 
       try {
-        const { updatedHistory } = await runAgentLoop(promptToRun, history, false, controller.signal, currentMode);
-        if (!wasCancelled) {
-          history = updatedHistory;
-          await saveSession(sessionId, history);
-        }
+        const { updatedHistory } = await runAgentLoop(promptToRun, history, false, controller.signal, currentMode, sessionId);
+        history = updatedHistory;
       } catch (err: any) {
         if (!wasCancelled && !err.message?.includes("cancelled")) {
           console.error(pc.red(`Error: ${err.message}`));
         }
+        history = await loadSession(sessionId);
       } finally {
         process.off("SIGINT", sigintHandler);
       }

@@ -5,18 +5,22 @@ import { toolsDefinition, executeTool } from "./tools";
 import { buildSystemPrompt } from "./prompts";
 import { startToolProgress, stopToolProgress, renderMarkdown } from "./ui";
 import { getTaggedFiles, isImageFile, fileToDataUri } from "./context";
+import { saveSession } from "./session";
 
 export async function runAgentLoop(
   userPrompt: string | any[],
   history: any[] = [],
   quiet: boolean = false,
   signal?: AbortSignal,
-  mode: "build" | "plan" = "build"
+  mode: "build" | "plan" = "build",
+  sessionId?: string
 ): Promise<{ response: string; updatedHistory: any[] }> {
   const settings = await loadSettings();
   const client = new OpenAI({
     apiKey: settings.apiKey || "dummy",
     baseURL: settings.baseUrl,
+    timeout: 60000,
+    maxRetries: 2,
   });
 
   const systemPrompt = await buildSystemPrompt(settings, mode);
@@ -58,6 +62,11 @@ export async function runAgentLoop(
     { role: "user", content: userContent },
   ];
 
+  // Save session immediately after adding user prompt
+  if (sessionId) {
+    await saveSession(sessionId, messages.filter((m) => m.role !== "system"));
+  }
+
   let isHeaderPrinted = false;
 
   while (true) {
@@ -69,40 +78,48 @@ export async function runAgentLoop(
       startToolProgress("Thinking...");
     }
 
-    const stream = await client.chat.completions.create(
-      {
-        model: settings.model || "gpt-4o",
-        messages,
-        tools: activeTools,
-        stream: true,
-      },
-      { signal }
-    );
-
     let fullContent = "";
     let toolCallsBuffer: any[] = [];
     let spinnerStopped = false;
 
-    for await (const chunk of stream) {
+    try {
+      const stream = await client.chat.completions.create(
+        {
+          model: settings.model || "gpt-4o",
+          messages,
+          tools: activeTools,
+          stream: true,
+        },
+        { signal }
+      );
+
+      for await (const chunk of stream) {
+        if (!spinnerStopped && !quiet) {
+          stopToolProgress();
+          spinnerStopped = true;
+        }
+        const delta = chunk.choices[0]?.delta;
+        if (delta?.content) {
+          fullContent += delta.content;
+        }
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index;
+            if (!toolCallsBuffer[idx]) {
+              toolCallsBuffer[idx] = { id: tc.id || "", function: { name: "", arguments: "" } };
+            }
+            if (tc.id) toolCallsBuffer[idx].id = tc.id;
+            if (tc.function?.name) toolCallsBuffer[idx].function.name = tc.function.name;
+            if (tc.function?.arguments) toolCallsBuffer[idx].function.arguments += tc.function.arguments;
+          }
+        }
+      }
+    } catch (err: any) {
       if (!spinnerStopped && !quiet) {
         stopToolProgress();
         spinnerStopped = true;
       }
-      const delta = chunk.choices[0]?.delta;
-      if (delta?.content) {
-        fullContent += delta.content;
-      }
-      if (delta?.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          const idx = tc.index;
-          if (!toolCallsBuffer[idx]) {
-            toolCallsBuffer[idx] = { id: tc.id || "", function: { name: "", arguments: "" } };
-          }
-          if (tc.id) toolCallsBuffer[idx].id = tc.id;
-          if (tc.function?.name) toolCallsBuffer[idx].function.name = tc.function.name;
-          if (tc.function?.arguments) toolCallsBuffer[idx].function.arguments += tc.function.arguments;
-        }
-      }
+      throw err;
     }
 
     if (!spinnerStopped && !quiet) {
@@ -129,6 +146,11 @@ export async function runAgentLoop(
       }));
     }
     messages.push(assistantMsg);
+
+    // Save session incrementally after assistant response
+    if (sessionId) {
+      await saveSession(sessionId, messages.filter((m) => m.role !== "system"));
+    }
 
     if (validToolCalls.length === 0) {
       const historyToSave = messages.filter((m) => m.role !== "system");
@@ -161,6 +183,11 @@ export async function runAgentLoop(
         tool_call_id: call.id,
         content: result,
       });
+
+      // Save session incrementally after each tool execution
+      if (sessionId) {
+        await saveSession(sessionId, messages.filter((m) => m.role !== "system"));
+      }
     }
   }
 }
@@ -170,6 +197,8 @@ export async function runSubAgent(prompt: string, role?: string): Promise<string
   const client = new OpenAI({
     apiKey: settings.apiKey || "dummy",
     baseURL: settings.baseUrl,
+    timeout: 60000,
+    maxRetries: 2,
   });
 
   const subAgentTools = toolsDefinition.filter((t) => t.function.name !== "task");
